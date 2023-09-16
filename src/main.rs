@@ -194,7 +194,7 @@ impl AsciiDocBackend {
                 | md::Options::ENABLE_TASKLISTS
                 | md::Options::ENABLE_HEADING_ATTRIBUTES,
         );
-        let mut indent = "  ".to_string();
+        let mut indent = Indent::new(1);
         for event in parser {
             match &event {
                 Event::Start(tag) => {
@@ -251,19 +251,19 @@ impl AsciiDocBackend {
                         Tag::Link(_link_type, _dest_url, _title) => { /* link */ }
                         Tag::Image(_link_type, _dest_url, _title) => { /* image */ }
                     }
-                    indent += "  ";
+                    indent.inc();
                 }
                 Event::End(tag) => {
-                    indent = indent[..indent.len() - 2].to_string();
+                    indent.dec();
                     trace!("[MD]{indent}End({tag:?})");
                 }
                 Event::Text(text) => {
                     trace!("[MD]{indent}Text({text})");
-                    indent += "  ";
+                    indent.inc();
 
                     // TODO: insert text
 
-                    indent = indent[..indent.len() - 2].to_string();
+                    indent.dec();
                 }
                 Event::Code(text) => {
                     trace!("[MD]{indent}Code({text})");
@@ -292,5 +292,26 @@ impl AsciiDocBackend {
             }
         }
         Ok((filename, offset))
+    }
+}
+
+struct Indent(usize);
+
+impl Indent {
+    fn new(start: usize) -> Self {
+        Self(start)
+    }
+    fn inc(&mut self) {
+        self.0 += 1
+    }
+    fn dec(&mut self) {
+        assert!(self.0 > 0);
+        self.0 -= 1
+    }
+}
+
+impl std::fmt::Display for Indent {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+        write!(f, "{}", "  ".repeat(self.0))
     }
 }
