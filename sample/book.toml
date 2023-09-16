@@ -3,7 +3,7 @@ authors = ["David Drysdale"]
 language = "en"
 multilingual = false
 src = "src"
-title = "DocBook Output Sample"
+title = "AsciiDoc Output Sample"
 
 [output.html]
 

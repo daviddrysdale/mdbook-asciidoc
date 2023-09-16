@@ -1,0 +1,15 @@
+# Chapter 3
+
+Explicit HTML.  First some line breaks.
+
+&nbsp;
+
+&nbsp;
+
+Now a horizontal rule:
+
+'''
+
+An image: image:../src/images/something.png[]
+
+A few in-line Unicode characters. There exists an empty set ∃ ∅.

@@ -1,0 +1,54 @@
+== Title of First Chapter
+
+This is a paragraph of text, including *bold* and _italic_ text. Also [line-through]#strikethrough#.
+
+This includes `+code+` identifiers, and some "quoted text" (including 'single quotes').
+
+This is an inline URL: https://lurklurk.org[]
+
+This is https://github.com/daviddrysdale/mdbook-docbook[link].
+
+[quote]
+This is a block quote, including
+multiple lines.
+
+A paragraph that includes HTML characters &ndash; like an en-dash.
+
+This is a fenced code block, marked as Rust.
+
+[source,rust]
+----
+fn main() {
+}
+----
+
+Now for some bullets:
+
+* top-level first
+** second-level 1
+** second-level 2
+*** third level
+* top-level second
+[arabic]
+.. sub-numbered bullet 1
+.. sub-numbered bullet 2
+* top-level third
++
+with follow-on para
+* top-level fourth.
+
+A MarkDown table.
+
+[cols="1,<1,^1,>1"]
+|===
+| Heading 1| Heading 2 | Heading 3| Hdr 4
+
+| normal | left-align | center | right
+
+| `code` | http://example.com[link] | | left _blank_
+|===
+
+List with checkboxes:
+
+* [ ] Do something.
+* [x] Do something else.
