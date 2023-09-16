@@ -68,6 +68,20 @@ impl From<std::io::Error> for Error {
     }
 }
 
+// Macros for output with tracing.
+macro_rules! out {
+    ($f:ident, $($arg:tt)+) => { {
+        trace!("[AD] emit: '{}'", format_args!($($arg)+));
+        write!($f, "{}", format_args!($($arg)+)).expect("failed to write output!");
+    } }
+}
+macro_rules! outln {
+    ($f:ident, $($arg:tt)+) => { {
+        trace!("[AD] emit: '{}\\n'", format_args!($($arg)+));
+        writeln!($f, "{}", format_args!($($arg)+)).expect("failed to write output!");
+    } }
+}
+
 impl AsciiDocBackend {
     /// Create a new backend, with options populated from the given context.
     pub fn new(ctx: &RenderContext) -> Result<Self, Error> {
@@ -210,18 +224,18 @@ impl AsciiDocBackend {
                                 md::HeadingLevel::H6 => 6,
                             };
                             // Add one level relative to MarkDown, as output is inside a book.
-                            write!(f, "{} ", "=".repeat(level + 1))?;
+                            out!(f, "{} ", "=".repeat(level + 1));
                         }
                         Tag::BlockQuote => {
-                            writeln!(f, "[quote]")?;
+                            outln!(f, "[quote]");
                         }
                         Tag::CodeBlock(kind) => {
-                            write!(f, "[source")?;
+                            out!(f, "[source");
                             if let md::CodeBlockKind::Fenced(lang) = kind {
-                                write!(f, ",{lang}")?;
+                                out!(f, ",{lang}");
                             }
-                            writeln!(f, "]")?;
-                            writeln!(f, "----")?;
+                            outln!(f, "]");
+                            outln!(f, "----");
                         }
                         Tag::List(first_num) => {
                             if let Some(_first_num) = first_num {
@@ -252,16 +266,16 @@ impl AsciiDocBackend {
 
                         // Inline elements
                         Tag::Emphasis => {
-                            write!(f, "_")?;
+                            out!(f, "_");
                         }
                         Tag::Strong => {
-                            write!(f, "*")?;
+                            out!(f, "*");
                         }
                         Tag::Strikethrough => {
-                            write!(f, "[line-through]#")?;
+                            out!(f, "[line-through]#");
                         }
                         Tag::Link(_link_type, dest_url, _title) => {
-                            write!(f, "{dest_url}[")?;
+                            out!(f, "{dest_url}[");
                         }
                         Tag::Image(_link_type, _dest_url, _title) => { /* image */ }
                     }
@@ -272,41 +286,41 @@ impl AsciiDocBackend {
                     trace!("[MD]{indent}End({tag:?})");
                     match tag {
                         Tag::Paragraph | Tag::Heading(_, _, _) | Tag::BlockQuote => {
-                            writeln!(f, "")?;
-                            writeln!(f, "")?;
+                            outln!(f, "");
+                            outln!(f, "");
                         }
                         Tag::CodeBlock(_kind) => {
-                            writeln!(f, "----")?;
-                            writeln!(f, "")?;
+                            outln!(f, "----");
+                            outln!(f, "");
                         }
                         Tag::List(_first_num) => {}
                         Tag::Item => {
-                            writeln!(f, "")?;
+                            outln!(f, "");
                         }
                         Tag::FootnoteDefinition(_text) => { /* footnote */ }
 
                         // Table elements
                         Tag::Table(_aligns) => {
-                            writeln!(f, "|===")?;
+                            outln!(f, "|===");
                         }
                         Tag::TableHead | Tag::TableRow => {
-                            write!(f, "")?;
-                            write!(f, "")?;
+                            out!(f, "");
+                            out!(f, "");
                         }
                         Tag::TableCell => {}
 
                         // Inline elements
                         Tag::Emphasis => {
-                            write!(f, "_")?;
+                            out!(f, "_");
                         }
                         Tag::Strong => {
-                            write!(f, "*")?;
+                            out!(f, "*");
                         }
                         Tag::Strikethrough => {
-                            write!(f, "#")?;
+                            out!(f, "#");
                         }
                         Tag::Link(_link_type, _dest_url, _title) => {
-                            write!(f, "]")?;
+                            out!(f, "]");
                         }
                         Tag::Image(_link_type, _dest_url, _title) => { /* image */ }
                     }
@@ -315,20 +329,20 @@ impl AsciiDocBackend {
                     trace!("[MD]{indent}Text({text})");
                     indent.inc();
 
-                    write!(f, "{}", text)?;
+                    out!(f, "{}", text);
 
                     indent.dec();
                 }
                 Event::Code(text) => {
                     trace!("[MD]{indent}Code({text})");
-                    write!(f, "`+{text}+`")?;
+                    out!(f, "`+{text}+`");
                 }
                 Event::Html(text) => {
                     trace!("[MD]{indent}Html({text})");
                     let html = text.to_string();
                     match html.trim() {
-                        "<br/>" => writeln!(f, "&nbsp;")?,
-                        "<hr/>" => writeln!(f, "'''")?,
+                        "<br/>" => outln!(f, "&nbsp;"),
+                        "<hr/>" => outln!(f, "'''"),
                         _ => error!("Unhandled HTML: {html}"),
                     }
                 }
@@ -337,7 +351,7 @@ impl AsciiDocBackend {
                 }
                 Event::SoftBreak => {
                     trace!("[MD]{indent}SoftBreak");
-                    writeln!(f, "")?;
+                    outln!(f, "");
                 }
                 Event::HardBreak => {
                     trace!("[MD]{indent}HardBreak");
@@ -348,7 +362,7 @@ impl AsciiDocBackend {
                 Event::TaskListMarker(done) => {
                     trace!("[MD]{indent}TaskListMarker({done})");
                     let marker = if *done { "[x]" } else { "[ ]" };
-                    write!(f, "{} ", marker)?;
+                    out!(f, "{} ", marker);
                 }
             }
         }
