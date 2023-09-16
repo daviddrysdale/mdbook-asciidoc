@@ -1,4 +1,5 @@
 = AsciiDoc Output Sample
+David Drysdale
 :doctype: book
 
 include::partA.adoc[leveloffset=0]
