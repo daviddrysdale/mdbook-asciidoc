@@ -4,10 +4,7 @@ PAGEOPEN=open
 # Dependencies
 SAMPLE_FILES=partA chapter1 chapter2 partB chapter3 subdir/chapter4
 
-sample/expected/book.html: $(addprefix sample/expected/,$(addsuffix .adoc,$(SAMPLE_FILES)))
-sample/book/asciidoc/book.adoc: $(addprefix sample/src/,$(addsuffix .md,$(SAMPLE_FILES)))
-
-all:
+all: sample/book/asciidoc/book.adoc
 
 install: ${HOME}/.cargo/bin/mdbook-asciidoc
 
@@ -33,9 +30,15 @@ sample/trace.out: install
 
 test: compare_adoc validate
 
+compare: sample/book/asciidoc/book.adoc
+	meld sample/expected sample/book/asciidoc
+
 compare_html: sample/book/asciidoc/book.html
 	${PAGEOPEN} sample/book/html/index.html # As produced by mdBook -> HTML
 	${PAGEOPEN} sample/book/asciidoc/book.html # As produced by mdBook -> asciiDoc -> HTML
 
 show_expected_html: sample/expected/book.html
 	${PAGEOPEN} $<
+
+sample/expected/book.html: $(addprefix sample/expected/,$(addsuffix .adoc,$(SAMPLE_FILES)))
+sample/book/asciidoc/book.adoc: $(addprefix sample/src/,$(addsuffix .md,$(SAMPLE_FILES)))

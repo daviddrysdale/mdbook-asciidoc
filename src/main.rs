@@ -177,14 +177,13 @@ impl AsciiDocBackend {
             )
         })?;
         debug!("output to {outfilename:?}");
-        let mut file = std::fs::File::create(&outfilename).map_err(|e| {
+        let mut f = std::fs::File::create(&outfilename).map_err(|e| {
             format!(
                 "Failed to create output file '{}': {:?}",
                 outfilename.display(),
                 e
             )
         })?;
-        write!(file, "{} {}", "=".repeat(offset + 1), ch.name)?; // TODO
 
         let parser = md::Parser::new_ext(
             &ch.content,
@@ -202,20 +201,27 @@ impl AsciiDocBackend {
                     match tag {
                         Tag::Paragraph => { /* para */ }
                         Tag::Heading(level, _frag_id, _classes) => {
-                            let _extra = match level {
-                                md::HeadingLevel::H1 => None,
-                                md::HeadingLevel::H2 => Some("sect1"),
-                                md::HeadingLevel::H3 => Some("sect2"),
-                                md::HeadingLevel::H4 => Some("sect3"),
-                                md::HeadingLevel::H5 => Some("sect4"),
-                                md::HeadingLevel::H6 => Some("sect5"),
+                            let level = match level {
+                                md::HeadingLevel::H1 => 1,
+                                md::HeadingLevel::H2 => 2,
+                                md::HeadingLevel::H3 => 3,
+                                md::HeadingLevel::H4 => 4,
+                                md::HeadingLevel::H5 => 5,
+                                md::HeadingLevel::H6 => 6,
                             };
-                            /* title */
+                            // Add one level relative to MarkDown, as output is inside a book.
+                            write!(f, "{} ", "=".repeat(level + 1))?;
                         }
-                        Tag::BlockQuote => { /* blockquote */ }
+                        Tag::BlockQuote => {
+                            writeln!(f, "[quote]")?;
+                        }
                         Tag::CodeBlock(kind) => {
-                            /* programlisting */
-                            if let md::CodeBlockKind::Fenced(_lang) = kind { /* with lang */ }
+                            write!(f, "[source")?;
+                            if let md::CodeBlockKind::Fenced(lang) = kind {
+                                write!(f, ",{lang}")?;
+                            }
+                            writeln!(f, "]")?;
+                            writeln!(f, "----")?;
                         }
                         Tag::List(first_num) => {
                             if let Some(_first_num) = first_num {
@@ -245,10 +251,18 @@ impl AsciiDocBackend {
                         Tag::TableCell => { /* entry */ }
 
                         // Inline elements
-                        Tag::Emphasis => { /* emphasis */ }
-                        Tag::Strong => { /* emphasis_bold */ }
-                        Tag::Strikethrough => { /* emphasis_strikethrough */ }
-                        Tag::Link(_link_type, _dest_url, _title) => { /* link */ }
+                        Tag::Emphasis => {
+                            write!(f, "_")?;
+                        }
+                        Tag::Strong => {
+                            write!(f, "*")?;
+                        }
+                        Tag::Strikethrough => {
+                            write!(f, "[line-through]#")?;
+                        }
+                        Tag::Link(_link_type, dest_url, _title) => {
+                            write!(f, "{dest_url}[")?;
+                        }
                         Tag::Image(_link_type, _dest_url, _title) => { /* image */ }
                     }
                     indent.inc();
@@ -256,28 +270,74 @@ impl AsciiDocBackend {
                 Event::End(tag) => {
                     indent.dec();
                     trace!("[MD]{indent}End({tag:?})");
+                    match tag {
+                        Tag::Paragraph | Tag::Heading(_, _, _) | Tag::BlockQuote => {
+                            writeln!(f, "")?;
+                            writeln!(f, "")?;
+                        }
+                        Tag::CodeBlock(_kind) => {
+                            writeln!(f, "----")?;
+                            writeln!(f, "")?;
+                        }
+                        Tag::List(_first_num) => {}
+                        Tag::Item => {
+                            writeln!(f, "")?;
+                        }
+                        Tag::FootnoteDefinition(_text) => { /* footnote */ }
+
+                        // Table elements
+                        Tag::Table(_aligns) => {
+                            writeln!(f, "|===")?;
+                        }
+                        Tag::TableHead | Tag::TableRow => {
+                            write!(f, "")?;
+                            write!(f, "")?;
+                        }
+                        Tag::TableCell => {}
+
+                        // Inline elements
+                        Tag::Emphasis => {
+                            write!(f, "_")?;
+                        }
+                        Tag::Strong => {
+                            write!(f, "*")?;
+                        }
+                        Tag::Strikethrough => {
+                            write!(f, "#")?;
+                        }
+                        Tag::Link(_link_type, _dest_url, _title) => {
+                            write!(f, "]")?;
+                        }
+                        Tag::Image(_link_type, _dest_url, _title) => { /* image */ }
+                    }
                 }
                 Event::Text(text) => {
                     trace!("[MD]{indent}Text({text})");
                     indent.inc();
 
-                    // TODO: insert text
+                    write!(f, "{}", text)?;
 
                     indent.dec();
                 }
                 Event::Code(text) => {
                     trace!("[MD]{indent}Code({text})");
-                    /* code: text */
+                    write!(f, "`+{text}+`")?;
                 }
                 Event::Html(text) => {
                     trace!("[MD]{indent}Html({text})");
+                    let html = text.to_string();
+                    match html.trim() {
+                        "<br/>" => writeln!(f, "&nbsp;")?,
+                        "<hr/>" => writeln!(f, "'''")?,
+                        _ => error!("Unhandled HTML: {html}"),
+                    }
                 }
                 Event::FootnoteReference(text) => {
                     trace!("[MD]{indent}FootnoteRef({text})");
                 }
                 Event::SoftBreak => {
-                    // TODO
                     trace!("[MD]{indent}SoftBreak");
+                    writeln!(f, "")?;
                 }
                 Event::HardBreak => {
                     trace!("[MD]{indent}HardBreak");
@@ -287,7 +347,8 @@ impl AsciiDocBackend {
                 }
                 Event::TaskListMarker(done) => {
                     trace!("[MD]{indent}TaskListMarker({done})");
-                    let _marker = if *done { "☑" } else { "☐" };
+                    let marker = if *done { "[x]" } else { "[ ]" };
+                    write!(f, "{} ", marker)?;
                 }
             }
         }

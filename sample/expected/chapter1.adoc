@@ -4,7 +4,7 @@ This is a paragraph of text, including *bold* and _italic_ text. Also [line-thro
 
 This includes `+code+` identifiers, and some "quoted text" (including 'single quotes').
 
-This is an inline URL: https://lurklurk.org[]
+This is an inline URL: https://lurklurk.org[https://lurklurk.org]
 
 This is https://github.com/daviddrysdale/mdbook-docbook[link].
 
@@ -12,7 +12,7 @@ This is https://github.com/daviddrysdale/mdbook-docbook[link].
 This is a block quote, including
 multiple lines.
 
-A paragraph that includes HTML characters &ndash; like an en-dash.
+A paragraph that includes HTML characters – like an en-dash.
 
 This is a fenced code block, marked as Rust.
 
