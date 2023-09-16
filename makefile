@@ -2,8 +2,10 @@
 PAGEOPEN=open
 
 # Dependencies
-sample/expected/book.html: sample/expected/partA.adoc sample/expected/chapter1.adoc sample/expected/chapter2.adoc sample/expected/partB.adoc sample/expected/chapter3.adoc sample/expected/chapter4.adoc
-sample/book/asciidoc/book.adoc: sample/expected/partA.md sample/expected/chapter1.md sample/expected/chapter2.md sample/expected/partB.md sample/expected/chapter3.md sample/expected/chapter4.md
+SAMPLE_FILES=partA chapter1 chapter2 partB chapter3 subdir/chapter4
+
+sample/expected/book.html: $(addprefix sample/expected/,$(addsuffix .adoc,$(SAMPLE_FILES)))
+sample/book/asciidoc/book.adoc: $(addprefix sample/src/,$(addsuffix .md,$(SAMPLE_FILES)))
 
 all:
 

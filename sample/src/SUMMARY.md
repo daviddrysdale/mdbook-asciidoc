@@ -10,4 +10,4 @@
 
 - [Part B](./partB.md)
     - [Chapter 3](./chapter3.md)
-    - [Chapter 4](./chapter4.md)
+    - [Chapter 4](./subdir/chapter4.md)
