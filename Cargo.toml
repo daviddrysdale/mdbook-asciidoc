@@ -1,0 +1,19 @@
+[package]
+name = "mdbook-asciidoc"
+version = "0.1.0"
+authors = ["David Drysdale <dmd@lurklurk.org>"]
+edition = "2021"
+license = "Apache-2.0"
+description = "mdBook backend for AsciiDoc generation"
+repository = "https://github.com/daviddrysdale/mdbook-asciidoc"
+keywords = ["mdbook", "asciidoc"]
+categories = ["text-processing"]
+
+[dependencies]
+env_logger = "0.9.*"
+log = "0.4.*"
+mdbook = "0.4.*"
+pulldown-cmark = "0.9.*"
+regex = "1.*"
+semver = "1.*"
+toml = "0.5.*"
