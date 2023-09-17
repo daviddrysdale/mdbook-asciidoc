@@ -32,9 +32,8 @@ fn main() -> Result<(), Error> {
 
     let mut backend = AsciiDocBackend::new(&ctx).expect("failed to initialize");
     info!(
-        "created AsciiDoc backend, outputs to '{}', unified:{}",
+        "created AsciiDoc backend, outputs to '{}'",
         backend.dest_dir.display(),
-        backend.unified
     );
 
     backend.process(ctx)
@@ -44,9 +43,6 @@ fn main() -> Result<(), Error> {
 struct AsciiDocBackend {
     /// Where to put output.
     pub dest_dir: std::path::PathBuf,
-    /// Whether to emit a single AsciiDoc file as output.
-    #[allow(dead_code)] // TODO: implement or drop
-    pub unified: bool,
 }
 
 /// Local error type.
@@ -168,17 +164,6 @@ impl AsciiDocBackend {
     /// Create a new backend, with options populated from the given context.
     pub fn new(ctx: &RenderContext) -> Result<Self, Error> {
         let dest_dir = ctx.destination.clone();
-        let unified = match ctx.config.get("unified") {
-            Some(toml::Value::Boolean(b)) => *b,
-            None => false,
-            v => {
-                return Err(Error::General(format!(
-                    "Unexpected value {:?} for boolean",
-                    v
-                )))
-            }
-        };
-
         std::fs::create_dir_all(&dest_dir).map_err(|e| {
             format!(
                 "Failed to create output directory '{}': {:?}",
@@ -187,7 +172,7 @@ impl AsciiDocBackend {
             )
         })?;
 
-        Ok(Self { dest_dir, unified })
+        Ok(Self { dest_dir })
     }
 
     /// Process the AsciiDoc document.
