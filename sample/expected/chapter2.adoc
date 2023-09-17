@@ -1,3 +1,4 @@
+[#file_chapter2_md]
 == Title of Second Chapter
 
 This chapter has sections, and footnotesfootnote:[This is the content of footnote1, including ``+code+`` and _italic_.].
@@ -8,9 +9,10 @@ This chapter has sections, and footnotesfootnote:[This is the content of footnot
 
 Some more footnotedfootnote:[This is foot note two.] text.
 
-==== Second subsection in first section, with a link:chapter3.md[link]
+==== Second subsection in first section, with a xref:file_chapter3_md[link]
 
-Also link:chapter3.md[link] in text.
+Also xref:file_chapter3_md[link] in text.
+
 
 === ``+enum+``s Start Second Section
 

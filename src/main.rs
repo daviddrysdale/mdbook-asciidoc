@@ -279,6 +279,13 @@ impl AsciiDocBackend {
         }
         let mut lists = Vec::new();
         let mut swapped_f = None;
+        if let Some(filename) = &ch.path {
+            out!(
+                f,
+                "[#file_{}]",
+                filename.display().to_string().replace(".", "_")
+            );
+        }
         for event in parser {
             match &event {
                 Event::Start(tag) => {
@@ -374,8 +381,21 @@ impl AsciiDocBackend {
                             out!(f, "[line-through]#");
                         }
                         Tag::Link(_link_type, dest_url, _title) => {
-                            // TODO: convert links to .md files to links to equivalent places in AsciiDoc
-                            out!(f, "link:{dest_url}[");
+                            let mut dest_url = dest_url.to_string();
+                            let mut mac = "link";
+                            if let Some(local_file) = url_is_local(&dest_url) {
+                                if local_file.ends_with(".md") {
+                                    debug!(
+                                        "transform target '{local_file}' of link into local xref"
+                                    );
+                                    dest_url = format!(
+                                        "file_{}",
+                                        local_file.to_string().replace(".", "_")
+                                    );
+                                    mac = "xref";
+                                }
+                            }
+                            out!(f, "{mac}:{dest_url}[");
                         }
                         Tag::Image(_link_type, dest_url, _title) => {
                             if f.after_blank() {

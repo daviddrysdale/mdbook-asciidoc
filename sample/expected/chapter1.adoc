@@ -1,3 +1,4 @@
+[#file_chapter1_md]
 == Title of First Chapter
 
 This is a paragraph of text, including *bold* and _italic_ text. Also [line-through]#strikethrough#.

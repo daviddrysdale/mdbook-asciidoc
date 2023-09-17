@@ -1,3 +1,4 @@
+[#file_chapter3_md]
 == Chapter 3
 
 Explicit HTML.  First some line breaks.
@@ -17,4 +18,3 @@ A standalone image
 image::images/isub/flower.jpg["This is the alt text",title="This is the title"]
 
 A few in-line Unicode characters. There exists an empty set ∃ ∅.
-
