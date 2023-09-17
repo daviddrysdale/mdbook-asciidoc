@@ -68,18 +68,48 @@ impl From<std::io::Error> for Error {
     }
 }
 
+struct Output {
+    f: std::fs::File,
+    col: usize,
+}
+
 // Macros for output with tracing.
 macro_rules! out {
     ($f:ident, $($arg:tt)+) => { {
-        trace!("[AD] emit: '{}'", format_args!($($arg)+));
-        write!($f, "{}", format_args!($($arg)+)).expect("failed to write output!");
+        let output = format!("{}", format_args!($($arg)+));
+        trace!("[AD] emit: '{}'", output);
+        write!($f.f, "{}", output).expect("failed to write output!");
+        $f.col += output.len();
     } }
 }
+
 macro_rules! outln {
     ($f:ident, $($arg:tt)+) => { {
-        trace!("[AD] emit: '{}\\n'", format_args!($($arg)+));
-        writeln!($f, "{}", format_args!($($arg)+)).expect("failed to write output!");
+        let output = format!("{}", format_args!($($arg)+));
+        trace!("[AD] emit: '{}\\n'", output);
+        write!($f.f, "{}\n", output).expect("failed to write output!");
+        $f.col = 0;
     } }
+}
+
+macro_rules! crlf {
+    ($f:ident) => {{
+        trace!("[AD] emit crlf: '\\n'");
+        writeln!($f.f, "").expect("failed to write output!");
+        $f.col = 0;
+    }};
+}
+
+macro_rules! cr {
+    ($f:ident) => {{
+        if $f.col > 0 {
+            trace!("[AD] cr needed so emit: '\\n'");
+            writeln!($f.f, "").expect("failed to write output!");
+            $f.col = 0;
+        } else {
+            trace!("[AD] cr but at col 0 already");
+        }
+    }};
 }
 
 impl AsciiDocBackend {
@@ -191,13 +221,14 @@ impl AsciiDocBackend {
             )
         })?;
         debug!("output to {outfilename:?}");
-        let mut f = std::fs::File::create(&outfilename).map_err(|e| {
+        let f = std::fs::File::create(&outfilename).map_err(|e| {
             format!(
                 "Failed to create output file '{}': {:?}",
                 outfilename.display(),
                 e
             )
         })?;
+        let mut f = Output { f, col: 0 };
 
         let parser = md::Parser::new_ext(
             &ch.content,
@@ -208,6 +239,12 @@ impl AsciiDocBackend {
                 | md::Options::ENABLE_HEADING_ATTRIBUTES,
         );
         let mut indent = Indent::new(1);
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum List {
+            Unnumbered,
+            Numbered,
+        }
+        let mut lists = Vec::new();
         for event in parser {
             match &event {
                 Event::Start(tag) => {
@@ -223,13 +260,15 @@ impl AsciiDocBackend {
                                 md::HeadingLevel::H5 => 5,
                                 md::HeadingLevel::H6 => 6,
                             };
-                            // Add one level relative to MarkDown, as output is inside a book.
-                            out!(f, "{} ", "=".repeat(level + 1));
+                            cr!(f);
+                            out!(f, "{} ", "=".repeat(level + offset));
                         }
                         Tag::BlockQuote => {
+                            cr!(f);
                             outln!(f, "[quote]");
                         }
                         Tag::CodeBlock(kind) => {
+                            cr!(f);
                             out!(f, "[source");
                             if let md::CodeBlockKind::Fenced(lang) = kind {
                                 out!(f, ",{lang}");
@@ -238,14 +277,23 @@ impl AsciiDocBackend {
                             outln!(f, "----");
                         }
                         Tag::List(first_num) => {
-                            if let Some(_first_num) = first_num {
-                                // TODO: cope with ordered lists not starting at 1
-                                /* orderedlist */
+                            lists.push(if first_num.is_some() {
+                                List::Numbered
                             } else {
-                                /* itemizedlist */
-                            }
+                                List::Unnumbered
+                            });
+                            // TODO: cope with ordered lists not starting at 1
                         }
-                        Tag::Item => { /* listitem */ }
+                        Tag::Item => {
+                            let indent = lists.len();
+                            assert!(indent > 0);
+                            let lead = match lists[indent - 1] {
+                                List::Numbered => ".",
+                                List::Unnumbered => "*",
+                            };
+                            cr!(f);
+                            out!(f, "{} ", lead.repeat(indent));
+                        }
                         Tag::FootnoteDefinition(_text) => { /* footnote */ }
 
                         // Table elements
@@ -285,17 +333,20 @@ impl AsciiDocBackend {
                     indent.dec();
                     trace!("[MD]{indent}End({tag:?})");
                     match tag {
-                        Tag::Paragraph | Tag::Heading(_, _, _) | Tag::BlockQuote => {
-                            outln!(f, "");
-                            outln!(f, "");
+                        Tag::Paragraph | Tag::Heading(_, _, _) => {
+                            cr!(f); // End the current in-progress line.
+                            crlf!(f); // Additional blank line.
                         }
                         Tag::CodeBlock(_kind) => {
                             outln!(f, "----");
-                            outln!(f, "");
+                            crlf!(f);
                         }
-                        Tag::List(_first_num) => {}
+                        Tag::BlockQuote => {}
+                        Tag::List(_first_num) => {
+                            lists.pop().expect("leaving a list when not in one!");
+                        }
                         Tag::Item => {
-                            outln!(f, "");
+                            crlf!(f);
                         }
                         Tag::FootnoteDefinition(_text) => { /* footnote */ }
 
@@ -351,7 +402,7 @@ impl AsciiDocBackend {
                 }
                 Event::SoftBreak => {
                     trace!("[MD]{indent}SoftBreak");
-                    outln!(f, "");
+                    crlf!(f);
                 }
                 Event::HardBreak => {
                     trace!("[MD]{indent}HardBreak");

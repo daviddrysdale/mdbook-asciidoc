@@ -1,3 +1,2 @@
 = Part A
 
-// No per-page title in a combined book: {{#title Title set to Part A}}
