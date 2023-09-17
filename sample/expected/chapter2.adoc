@@ -1,11 +1,11 @@
-= Title of Second Chapter
+== Title of Second Chapter
 
 This chapter has sections
 
-== First Section
+=== First Section
 
-=== First subsection in first section
+==== First subsection in first section
 
-=== Second subsection in first section
+==== Second subsection in first section
 
-== Second Section
+=== Second Section

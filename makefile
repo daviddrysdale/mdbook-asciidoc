@@ -39,6 +39,8 @@ compare_html: sample/book/asciidoc/book.html
 
 show_expected_html: sample/expected/book.html
 	${PAGEOPEN} $<
+show_generated_html: sample/book/asciidoc/book.html
+	${PAGEOPEN} $<
 
 sample/expected/book.html: $(addprefix sample/expected/,$(addsuffix .adoc,$(SAMPLE_FILES)))
 sample/book/asciidoc/book.adoc: $(addprefix sample/src/,$(addsuffix .md,$(SAMPLE_FILES)))

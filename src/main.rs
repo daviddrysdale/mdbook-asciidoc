@@ -473,8 +473,14 @@ impl AsciiDocBackend {
                     trace!("[MD]{indent}Html({text})");
                     let html = text.to_string();
                     match html.trim() {
-                        "<br/>" => outln!(f, "&nbsp;"),
-                        "<hr/>" => outln!(f, "'''"),
+                        "<br/>" => {
+                            outln!(f, "&nbsp;");
+                            crlf!(f);
+                        }
+                        "<hr/>" => {
+                            outln!(f, "'''");
+                            crlf!(f);
+                        }
                         _ => error!("Unhandled HTML: {html}"),
                     }
                 }
