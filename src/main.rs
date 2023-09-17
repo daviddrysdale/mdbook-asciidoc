@@ -69,8 +69,27 @@ impl From<std::io::Error> for Error {
 }
 
 struct Output {
+    /// File to write to.
     f: std::fs::File,
+    /// Current output line, zero-indexed.
+    line: usize,
+    /// Current output column.
     col: usize,
+}
+
+impl Output {
+    fn new(f: std::fs::File) -> Self {
+        Self { f, line: 0, col: 0 }
+    }
+    fn write(&mut self, text: &str) {
+        write!(self.f, "{}", text).expect("failed to write to output file!");
+        self.col += text.len();
+    }
+    fn writeln(&mut self, text: &str) {
+        write!(self.f, "{}\n", text).expect("failed to write to output file!");
+        self.col = 0;
+        self.line += 1;
+    }
 }
 
 // Macros for output with tracing.
@@ -78,8 +97,7 @@ macro_rules! out {
     ($f:ident, $($arg:tt)+) => { {
         let output = format!("{}", format_args!($($arg)+));
         trace!("[AD] emit: '{}'", output);
-        write!($f.f, "{}", output).expect("failed to write output!");
-        $f.col += output.len();
+        $f.write(&output);
     } }
 }
 
@@ -87,16 +105,14 @@ macro_rules! outln {
     ($f:ident, $($arg:tt)+) => { {
         let output = format!("{}", format_args!($($arg)+));
         trace!("[AD] emit: '{}\\n'", output);
-        write!($f.f, "{}\n", output).expect("failed to write output!");
-        $f.col = 0;
+        $f.writeln(&output);
     } }
 }
 
 macro_rules! crlf {
     ($f:ident) => {{
         trace!("[AD] emit crlf: '\\n'");
-        writeln!($f.f, "").expect("failed to write output!");
-        $f.col = 0;
+        $f.writeln("");
     }};
 }
 
@@ -104,10 +120,20 @@ macro_rules! cr {
     ($f:ident) => {{
         if $f.col > 0 {
             trace!("[AD] cr needed so emit: '\\n'");
-            writeln!($f.f, "").expect("failed to write output!");
-            $f.col = 0;
+            $f.writeln("");
         } else {
             trace!("[AD] cr but at col 0 already");
+        }
+    }};
+}
+
+macro_rules! maybelf {
+    ($f:ident) => {{
+        if $f.line > 0 {
+            trace!("[AD] lf needed so emit: '\\n'");
+            $f.writeln("");
+        } else {
+            trace!("[AD] at start so no lf");
         }
     }};
 }
@@ -228,7 +254,7 @@ impl AsciiDocBackend {
                 e
             )
         })?;
-        let mut f = Output { f, col: 0 };
+        let mut f = Output::new(f);
 
         let parser = md::Parser::new_ext(
             &ch.content,
@@ -261,6 +287,7 @@ impl AsciiDocBackend {
                                 md::HeadingLevel::H6 => 6,
                             };
                             cr!(f);
+                            maybelf!(f);
                             out!(f, "{} ", "=".repeat(level + offset));
                         }
                         Tag::BlockQuote => {
