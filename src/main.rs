@@ -298,19 +298,29 @@ impl AsciiDocBackend {
 
                         // Table elements
                         Tag::Table(aligns) => {
-                            /* tgroup */
-                            for align in aligns {
-                                let _colspec = match align {
-                                    md::Alignment::None => "none",
-                                    md::Alignment::Left => "left",
-                                    md::Alignment::Center => "center",
-                                    md::Alignment::Right => "right",
-                                };
-                            }
+                            let cols = aligns
+                                .iter()
+                                .map(|a| match a {
+                                    md::Alignment::None => "1",
+                                    md::Alignment::Left => "<1",
+                                    md::Alignment::Center => "^1",
+                                    md::Alignment::Right => ">1",
+                                })
+                                .collect::<Vec<&str>>()
+                                .join(",");
+                            outln!(f, "[cols=\"{cols}\"]");
+                            outln!(f, "|===");
                         }
-                        Tag::TableHead => { /* row */ }
-                        Tag::TableRow => { /* row */ }
-                        Tag::TableCell => { /* entry */ }
+                        Tag::TableHead => {
+                            // For a head, *don't* prefix with blank line.
+                        }
+                        Tag::TableRow => {
+                            cr!(f);
+                            crlf!(f);
+                        }
+                        Tag::TableCell => {
+                            out!(f, "| ");
+                        }
 
                         // Inline elements
                         Tag::Emphasis => {
@@ -352,12 +362,11 @@ impl AsciiDocBackend {
 
                         // Table elements
                         Tag::Table(_aligns) => {
+                            cr!(f);
                             outln!(f, "|===");
+                            crlf!(f);
                         }
-                        Tag::TableHead | Tag::TableRow => {
-                            out!(f, "");
-                            out!(f, "");
-                        }
+                        Tag::TableHead | Tag::TableRow => {}
                         Tag::TableCell => {}
 
                         // Inline elements
@@ -386,6 +395,7 @@ impl AsciiDocBackend {
                 }
                 Event::Code(text) => {
                     trace!("[MD]{indent}Code({text})");
+                    // Backtick induces fixed-width font, plus sign prevents interpretation of characters.
                     out!(f, "`+{text}+`");
                 }
                 Event::Html(text) => {

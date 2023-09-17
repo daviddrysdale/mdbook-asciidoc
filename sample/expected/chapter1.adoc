@@ -41,11 +41,11 @@ A MarkDown table.
 
 [cols="1,<1,^1,>1"]
 |===
-| Heading 1| Heading 2 | Heading 3| Hdr 4
+| Heading 1| Heading 2| Heading 3| Hdr 4
 
-| normal | left-align | center | right
+| normal| left-align| center| right
 
-| `code` | http://example.com[link] | | left _blank_
+| `+code+`| http://example.com[link]| | left _blank_
 |===
 
 List with checkboxes:
