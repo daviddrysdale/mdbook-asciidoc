@@ -7,6 +7,7 @@ use mdbook::{
 };
 use pulldown_cmark as md;
 use std::io::Write;
+use std::path::{Path, PathBuf};
 
 /// Main entrypoint for backend.
 fn main() -> Result<(), Error> {
@@ -42,7 +43,9 @@ fn main() -> Result<(), Error> {
 /// AsciiDoc backend processor.
 struct AsciiDocBackend {
     /// Where to put output.
-    pub dest_dir: std::path::PathBuf,
+    pub dest_dir: PathBuf,
+    /// Where to get input.
+    src_dir: PathBuf,
 }
 
 /// Local error type.
@@ -171,8 +174,10 @@ impl AsciiDocBackend {
                 e
             )
         })?;
+        let mut src_dir = ctx.root.clone();
+        src_dir.push(ctx.config.book.src.clone());
 
-        Ok(Self { dest_dir })
+        Ok(Self { dest_dir, src_dir })
     }
 
     /// Process the AsciiDoc document.
@@ -248,7 +253,7 @@ impl AsciiDocBackend {
 
         // Create the corresponding file in the output directory.
         let outfilename = self.dest_dir.join(filename.clone());
-        let dest_dir = std::path::Path::new(&outfilename).parent().unwrap();
+        let dest_dir = Path::new(&outfilename).parent().unwrap();
         debug!("mkdir -p {dest_dir:?}");
         std::fs::create_dir_all(&dest_dir).map_err(|e| {
             format!(
@@ -381,9 +386,7 @@ impl AsciiDocBackend {
                                 // Inline image (:).
                                 out!(f, "image:{dest_url}[\"");
                             }
-
-                            // TODO: if destination is a local file, copy it into an equivalent
-                            // location in the output directory.
+                            self.copy_file_to_output(dest_url)?;
 
                             // May be followed by an `Event::Text` holding the alt text.
                         }
@@ -493,6 +496,58 @@ impl AsciiDocBackend {
         }
         Ok((filename, offset))
     }
+
+    // If the url is a local file, copy it into an equivalent location in the output directory.
+    fn copy_file_to_output(&self, url: &str) -> Result<(), Error> {
+        if let Some(filename) = url_is_local(url) {
+            debug!("[AD] copy {filename} to output directory");
+            let path = Path::new(&filename);
+            if let Some(dir) = path.parent() {
+                let mut dest_dir = self.dest_dir.clone();
+                dest_dir.push(dir);
+                info!("[AD] mkdir {}", dest_dir.display());
+                std::fs::create_dir_all(&dest_dir).map_err(|e| {
+                    format!(
+                        "Failed to create output directory '{}': {:?}",
+                        dest_dir.display(),
+                        e
+                    )
+                })?;
+            }
+            let mut src_file = self.src_dir.clone();
+            src_file.push(path);
+            let mut dest_file = self.dest_dir.clone();
+            dest_file.push(path);
+            debug!("[AD] cp {} {}", src_file.display(), dest_file.display());
+            std::fs::copy(src_file, dest_file)?;
+        }
+        Ok(())
+    }
+}
+
+/// Determine if a URL refers to a local file, and if so return the local path.
+/// Rough and ready, doesn't cope with many edge cases.
+fn url_is_local(url: &str) -> Option<String> {
+    if let Ok(url) = url::Url::parse(url) {
+        if url.scheme() == "file" {
+            Some(url.path().to_string())
+        } else {
+            None
+        }
+    } else {
+        if url.starts_with("/") {
+            // Leave absolute paths alone.
+            None
+        } else if url.ends_with("/") {
+            // Leave directories alone.
+            None
+        } else if url.starts_with("./") {
+            // Strip leading dot-slash.
+            Some(url[2..].to_string())
+        } else {
+            Some(url.to_string())
+        }
+    }
 }
 
 struct Indent(usize);
@@ -520,4 +575,26 @@ impl std::fmt::Display for Indent {
 fn md2ad(v: &str) -> String {
     // A '+' means something in AsciiDoc but not in MarkDown; use the HTML escape code instead.
     v.replace("+", "&plus;")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_url_is_local() {
+        let tests = [
+            ("src/file", Some("src/file")),
+            ("./src/file", Some("src/file")),
+            ("src/subdir/file", Some("src/subdir/file")),
+            ("src/subdir/", None),
+            ("/root/subdir/file", None),
+            ("http://example.com/file", None),
+        ];
+        for (input, want) in tests {
+            let want = want.map(|s| s.to_string());
+            let got = url_is_local(input);
+            assert_eq!(got, want, "Failed for input {input}");
+        }
+    }
 }

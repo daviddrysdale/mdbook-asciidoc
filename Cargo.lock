@@ -926,6 +926,7 @@ dependencies = [
  "regex",
  "semver",
  "toml",
+ "url",
 ]
 
 [[package]]
