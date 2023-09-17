@@ -13,7 +13,8 @@ This is [link](https://github.com/daviddrysdale/mdbook-docbook).
 
 A paragraph that includes HTML characters &ndash; like an en-dash.
 
-This is a fenced code block, marked as Rust.
+Scott Meyers' original _Effective C++_ series.  The C++ language was (and is) full of footguns, so _Effective
+C++_ focused on a collection of advice.
 
 ```rust
 fn main() {

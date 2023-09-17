@@ -389,7 +389,7 @@ impl AsciiDocBackend {
                     trace!("[MD]{indent}Text({text})");
                     indent.inc();
 
-                    out!(f, "{}", text);
+                    out!(f, "{}", md2ad(text));
 
                     indent.dec();
                 }
@@ -450,4 +450,10 @@ impl std::fmt::Display for Indent {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
         write!(f, "{}", "  ".repeat(self.0))
     }
+}
+
+/// Convert MarkDown text with no (MarkDown) special chars into AsciiDoc text with no AsciiDoc special chars.
+fn md2ad(v: &str) -> String {
+    // A '+' means something in AsciiDoc but not in MarkDown; use the HTML escape code instead.
+    v.replace("+", "&plus;")
 }
