@@ -466,8 +466,10 @@ impl AsciiDocBackend {
                 }
                 Event::Code(text) => {
                     trace!("[MD]{indent}Code({text})");
-                    // Backtick induces fixed-width font, plus sign prevents interpretation of characters.
-                    out!(f, "`+{text}+`");
+                    // - Backtick induces fixed-width font.
+                    // - Double-backtick allows use in positions without surrounding space.
+                    // - Plus sign prevents interpretation of characters.
+                    out!(f, "``+{text}+``");
                 }
                 Event::Html(text) => {
                     trace!("[MD]{indent}Html({text})");

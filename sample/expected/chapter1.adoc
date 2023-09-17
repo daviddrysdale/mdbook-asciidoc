@@ -2,7 +2,7 @@
 
 This is a paragraph of text, including *bold* and _italic_ text. Also [line-through]#strikethrough#.
 
-This includes `+code+` identifiers, and some "quoted text" (including 'single quotes').
+This includes ``+code+`` identifiers, and some "quoted text" (including 'single quotes').
 
 This is an inline URL: https://lurklurk.org[https://lurklurk.org]
 
@@ -46,7 +46,7 @@ A MarkDown table.
 
 | normal| left-align| center| right
 
-| `+code+`| http://example.com[link]| | left _blank_
+| ``+code+``| http://example.com[link]| | left _blank_
 |===
 
 List with checkboxes:

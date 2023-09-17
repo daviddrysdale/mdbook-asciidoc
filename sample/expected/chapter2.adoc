@@ -4,8 +4,8 @@ This chapter has sections
 
 === First Section
 
-==== First subsection in first section
+==== First subsection in first section, with ``+code+`` in title
 
 ==== Second subsection in first section
 
-=== Second Section
+=== ``+enum+``s Start Second Section
