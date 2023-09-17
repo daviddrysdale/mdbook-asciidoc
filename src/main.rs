@@ -40,14 +40,6 @@ fn main() -> Result<(), Error> {
     backend.process(ctx)
 }
 
-/// AsciiDoc backend processor.
-struct AsciiDocBackend {
-    /// Where to put output.
-    pub dest_dir: PathBuf,
-    /// Where to get input.
-    src_dir: PathBuf,
-}
-
 /// Local error type.
 #[derive(Debug)]
 enum Error {
@@ -67,53 +59,81 @@ impl From<std::io::Error> for Error {
     }
 }
 
-struct Output {
-    /// File to write to.
-    f: std::fs::File,
-    /// Current output line, zero-indexed.
-    line: usize,
-    /// Current output column.
-    col: usize,
-    /// Preceding line.
-    prev_line: Option<String>,
-    /// Current line contents.
+#[allow(dead_code)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Strip {
+    None,
+    TrailingWhitespace,
+}
+
+#[derive(Clone, Default)]
+struct AsciiDocOutput {
+    /// Line-by-line content.
+    prev_lines: Vec<String>,
+    /// Current line being accumulated.
     cur_line: String,
 }
 
-impl Output {
-    fn new(f: std::fs::File) -> Self {
-        Self {
-            f,
-            line: 0,
-            col: 0,
-            prev_line: None,
-            cur_line: "".to_string(),
-        }
-    }
+impl AsciiDocOutput {
     fn write(&mut self, text: &str) {
-        write!(self.f, "{}", text).expect("failed to write to output file!");
-        self.col += text.len();
         self.cur_line += text;
     }
+
     fn writeln(&mut self, text: &str) {
-        write!(self.f, "{}\n", text).expect("failed to write to output file!");
-        self.col = 0;
-        self.line += 1;
-        self.prev_line = Some(std::mem::replace(&mut self.cur_line, "".to_string()));
+        self.cur_line += text;
+        let cur_line = std::mem::replace(&mut self.cur_line, "".to_string());
+        self.prev_lines.push(cur_line);
+    }
+
+    fn prev_line(&self) -> Option<&str> {
+        if self.prev_lines.is_empty() {
+            None
+        } else {
+            Some(&self.prev_lines[self.prev_lines.len() - 1])
+        }
+    }
+
+    fn col(&self) -> usize {
+        self.cur_line.len()
     }
 
     /// Is the current output position just after a blank line?
     fn after_blank(&self) -> bool {
-        if self.col > 0 {
+        if !self.cur_line.is_empty() {
             false
         } else {
-            if let Some(prev_line) = &self.prev_line {
-                prev_line.is_empty()
-            } else {
-                // Treat the first line of a file as being after a blank line.
-                true
+            match self.prev_line() {
+                Some(line) => line.is_empty(),
+                None => {
+                    // Treat the first line of a file as being after a blank line.
+                    true
+                }
             }
         }
+    }
+
+    fn replace_all(&mut self, from: &str, to: &AsciiDocOutput, strip: Strip) {
+        let mut to_data = Vec::new();
+        to.write_to(&mut to_data)
+            .expect("failed to write substitution text");
+        let to = String::from_utf8(to_data).expect("non UTF8 text!");
+        let to = match strip {
+            Strip::None => &to,
+            Strip::TrailingWhitespace => to.trim_end(),
+        };
+        for line in &mut self.prev_lines {
+            let newline = line.replace(from, &to);
+            let _ = std::mem::replace(line, newline);
+        }
+        self.cur_line = self.cur_line.replace(from, &to);
+    }
+
+    fn write_to<T: std::io::Write>(&self, out: &mut T) -> Result<(), Error> {
+        for line in &self.prev_lines {
+            writeln!(out, "{}", line)?;
+        }
+        writeln!(out, "{}", self.cur_line)?;
+        Ok(())
     }
 }
 
@@ -143,7 +163,7 @@ macro_rules! crlf {
 
 macro_rules! cr {
     ($f:ident) => {{
-        if $f.col > 0 {
+        if $f.col() > 0 {
             trace!("[AD] cr needed so emit: '\\n'");
             $f.writeln("");
         } else {
@@ -154,13 +174,21 @@ macro_rules! cr {
 
 macro_rules! maybelf {
     ($f:ident) => {{
-        if $f.prev_line.is_some() {
+        if $f.prev_line().is_some() {
             trace!("[AD] lf needed so emit: '\\n'");
             $f.writeln("");
         } else {
             trace!("[AD] at start so no lf");
         }
     }};
+}
+
+/// AsciiDoc backend processor.
+struct AsciiDocBackend {
+    /// Where to put output.
+    pub dest_dir: PathBuf,
+    /// Where to get input.
+    src_dir: PathBuf,
 }
 
 impl AsciiDocBackend {
@@ -234,44 +262,7 @@ impl AsciiDocBackend {
         debug!("Visit chapter '{}' from file '{:?}'", ch.name, ch.path);
         let offset = ch.parent_names.len();
 
-        // Figure out the unadorned filename for this chapter.
-        let filename = ch
-            .path
-            .as_ref()
-            .map(|path| {
-                path.to_string_lossy()
-                    .strip_suffix(".md")
-                    .unwrap()
-                    .to_string()
-            })
-            .unwrap_or_else(|| {
-                // No path, so build one from the chapter name
-                ch.name.to_ascii_lowercase().replace(" ", "_")
-            });
-        let filename = filename + ".adoc";
-        debug!("basename = {filename}");
-
-        // Create the corresponding file in the output directory.
-        let outfilename = self.dest_dir.join(filename.clone());
-        let dest_dir = Path::new(&outfilename).parent().unwrap();
-        debug!("mkdir -p {dest_dir:?}");
-        std::fs::create_dir_all(&dest_dir).map_err(|e| {
-            format!(
-                "Failed to create output directory '{}': {:?}",
-                dest_dir.display(),
-                e
-            )
-        })?;
-        debug!("output to {outfilename:?}");
-        let f = std::fs::File::create(&outfilename).map_err(|e| {
-            format!(
-                "Failed to create output file '{}': {:?}",
-                outfilename.display(),
-                e
-            )
-        })?;
-        let mut f = Output::new(f);
-
+        let mut f = AsciiDocOutput::default();
         let parser = md::Parser::new_ext(
             &ch.content,
             md::Options::ENABLE_TABLES
@@ -287,12 +278,13 @@ impl AsciiDocBackend {
             Numbered,
         }
         let mut lists = Vec::new();
+        let mut swapped_f = None;
         for event in parser {
             match &event {
                 Event::Start(tag) => {
                     trace!("[MD]{indent}Start({tag:?})");
                     match tag {
-                        Tag::Paragraph => { /* para */ }
+                        Tag::Paragraph => {}
                         Tag::Heading(level, _frag_id, _classes) => {
                             let level = match level {
                                 md::HeadingLevel::H1 => 1,
@@ -337,7 +329,13 @@ impl AsciiDocBackend {
                             cr!(f);
                             out!(f, "{} ", lead.repeat(indent));
                         }
-                        Tag::FootnoteDefinition(_text) => { /* footnote */ }
+                        Tag::FootnoteDefinition(text) => {
+                            // Switch to accumulating output for the footnote.
+                            debug!("Accumulate text for definition of footnote {text}");
+                            assert!(swapped_f.is_none());
+                            swapped_f = Some(f);
+                            f = AsciiDocOutput::default();
+                        }
 
                         // Table elements
                         Tag::Table(aligns) => {
@@ -412,7 +410,17 @@ impl AsciiDocBackend {
                         Tag::Item => {
                             crlf!(f);
                         }
-                        Tag::FootnoteDefinition(_text) => { /* footnote */ }
+                        Tag::FootnoteDefinition(text) => {
+                            // Switch back to accumulating text for the chapter.
+                            debug!("Done accumulating text for definition of footnote {text}");
+                            let footnote = f;
+                            f = swapped_f.take().expect("No stored output!");
+                            f.replace_all(
+                                &footnote_marker(text),
+                                &footnote,
+                                Strip::TrailingWhitespace,
+                            );
+                        }
 
                         // Table elements
                         Tag::Table(_aligns) => {
@@ -476,6 +484,7 @@ impl AsciiDocBackend {
                 }
                 Event::FootnoteReference(text) => {
                     trace!("[MD]{indent}FootnoteRef({text})");
+                    out!(f, "footnote:[{}]", footnote_marker(text));
                 }
                 Event::SoftBreak => {
                     trace!("[MD]{indent}SoftBreak");
@@ -494,6 +503,44 @@ impl AsciiDocBackend {
                 }
             }
         }
+
+        // Figure out the unadorned filename for this chapter.
+        let filename = ch
+            .path
+            .as_ref()
+            .map(|path| {
+                path.to_string_lossy()
+                    .strip_suffix(".md")
+                    .unwrap()
+                    .to_string()
+            })
+            .unwrap_or_else(|| {
+                // No path, so build one from the chapter name
+                ch.name.to_ascii_lowercase().replace(" ", "_")
+            });
+        let filename = filename + ".adoc";
+        debug!("basename = {filename}");
+
+        // Create the corresponding file in the output directory.
+        let outfilename = self.dest_dir.join(filename.clone());
+        let dest_dir = Path::new(&outfilename).parent().unwrap();
+        debug!("mkdir -p {dest_dir:?}");
+        std::fs::create_dir_all(&dest_dir).map_err(|e| {
+            format!(
+                "Failed to create output directory '{}': {:?}",
+                dest_dir.display(),
+                e
+            )
+        })?;
+        debug!("output to {outfilename:?}");
+        let mut outfile = std::fs::File::create(&outfilename).map_err(|e| {
+            format!(
+                "Failed to create output file '{}': {:?}",
+                outfilename.display(),
+                e
+            )
+        })?;
+        f.write_to(&mut outfile)?;
         Ok((filename, offset))
     }
 
@@ -575,6 +622,10 @@ impl std::fmt::Display for Indent {
 fn md2ad(v: &str) -> String {
     // A '+' means something in AsciiDoc but not in MarkDown; use the HTML escape code instead.
     v.replace("+", "&plus;")
+}
+
+fn footnote_marker(v: &str) -> String {
+    format!("TODO-footnote-text-{v}")
 }
 
 #[cfg(test)]
