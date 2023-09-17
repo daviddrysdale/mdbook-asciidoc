@@ -374,7 +374,8 @@ impl AsciiDocBackend {
                             out!(f, "[line-through]#");
                         }
                         Tag::Link(_link_type, dest_url, _title) => {
-                            out!(f, "{dest_url}[");
+                            // TODO: convert links to .md files to links to equivalent places in AsciiDoc
+                            out!(f, "link:{dest_url}[");
                         }
                         Tag::Image(_link_type, dest_url, _title) => {
                             if f.after_blank() {

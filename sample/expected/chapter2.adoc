@@ -8,7 +8,9 @@ This chapter has sections, and footnotesfootnote:[This is the content of footnot
 
 Some more footnotedfootnote:[This is foot note two.] text.
 
-==== Second subsection in first section
+==== Second subsection in first section, with a link:chapter3.md[link]
+
+Also link:chapter3.md[link] in text.
 
 === ``+enum+``s Start Second Section
 

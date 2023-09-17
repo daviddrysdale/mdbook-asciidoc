@@ -8,7 +8,9 @@ This chapter has sections, and footnotes[^1].
 
 Some more footnoted[^2] text.
 
-### Second subsection in first section
+### Second subsection in first section, with a [link](chapter3.md)
+
+Also [link](chapter3.md) in text.
 
 ## `enum`s Start Second Section
 
