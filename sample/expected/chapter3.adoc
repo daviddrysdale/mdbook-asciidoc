@@ -10,6 +10,10 @@ Now a horizontal rule:
 
 '''
 
-An image: image:../src/images/something.png[]
+An inline image image:images/something.png["This is the alt text"] in the text.
+
+A standalone image
+
+image::images/isub/flower.jpg["This is the alt text",title="This is the title"]
 
 A few in-line Unicode characters. There exists an empty set ∃ ∅.

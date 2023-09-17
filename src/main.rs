@@ -75,20 +75,46 @@ struct Output {
     line: usize,
     /// Current output column.
     col: usize,
+    /// Preceding line.
+    prev_line: Option<String>,
+    /// Current line contents.
+    cur_line: String,
 }
 
 impl Output {
     fn new(f: std::fs::File) -> Self {
-        Self { f, line: 0, col: 0 }
+        Self {
+            f,
+            line: 0,
+            col: 0,
+            prev_line: None,
+            cur_line: "".to_string(),
+        }
     }
     fn write(&mut self, text: &str) {
         write!(self.f, "{}", text).expect("failed to write to output file!");
         self.col += text.len();
+        self.cur_line += text;
     }
     fn writeln(&mut self, text: &str) {
         write!(self.f, "{}\n", text).expect("failed to write to output file!");
         self.col = 0;
         self.line += 1;
+        self.prev_line = Some(std::mem::replace(&mut self.cur_line, "".to_string()));
+    }
+
+    /// Is the current output position just after a blank line?
+    fn after_blank(&self) -> bool {
+        if self.col > 0 {
+            false
+        } else {
+            if let Some(prev_line) = &self.prev_line {
+                prev_line.is_empty()
+            } else {
+                // Treat the first line of a file as being after a blank line.
+                true
+            }
+        }
     }
 }
 
@@ -129,7 +155,7 @@ macro_rules! cr {
 
 macro_rules! maybelf {
     ($f:ident) => {{
-        if $f.line > 0 {
+        if $f.prev_line.is_some() {
             trace!("[AD] lf needed so emit: '\\n'");
             $f.writeln("");
         } else {
@@ -362,7 +388,20 @@ impl AsciiDocBackend {
                         Tag::Link(_link_type, dest_url, _title) => {
                             out!(f, "{dest_url}[");
                         }
-                        Tag::Image(_link_type, _dest_url, _title) => { /* image */ }
+                        Tag::Image(_link_type, dest_url, _title) => {
+                            if f.after_blank() {
+                                // Block image (::).
+                                out!(f, "image::{dest_url}[\"");
+                            } else {
+                                // Inline image (:).
+                                out!(f, "image:{dest_url}[\"");
+                            }
+
+                            // TODO: if destination is a local file, copy it into an equivalent
+                            // location in the output directory.
+
+                            // May be followed by an `Event::Text` holding the alt text.
+                        }
                     }
                     indent.inc();
                 }
@@ -409,7 +448,12 @@ impl AsciiDocBackend {
                         Tag::Link(_link_type, _dest_url, _title) => {
                             out!(f, "]");
                         }
-                        Tag::Image(_link_type, _dest_url, _title) => { /* image */ }
+                        Tag::Image(_link_type, _dest_url, title) => {
+                            if !title.is_empty() {
+                                out!(f, "\",title=\"{title}");
+                            }
+                            out!(f, "\"]");
+                        }
                     }
                 }
                 Event::Text(text) => {
