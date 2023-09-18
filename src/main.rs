@@ -649,7 +649,7 @@ impl std::fmt::Display for Indent {
 /// Convert MarkDown text with no (MarkDown) special chars into AsciiDoc text with no AsciiDoc special chars.
 fn md2ad(v: &str) -> String {
     // A '+' means something in AsciiDoc but not in MarkDown; use the HTML escape code instead.
-    v.replace("+", "&plus;")
+    v.replace("+", "&#43;")
 }
 
 fn footnote_marker(v: &str) -> String {

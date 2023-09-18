@@ -15,8 +15,8 @@ multiple lines.
 
 A paragraph that includes HTML characters – like an en-dash.
 
-Scott Meyers' original _Effective C&plus;&plus;_ series.  The C&plus;&plus; language was (and is) full of footguns, so _Effective
-C&plus;&plus;_ focused on a collection of advice.
+Scott Meyers' original _Effective C&#43;&#43;_ series.  The C&#43;&#43; language was (and is) full of footguns, so _Effective
+C&#43;&#43;_ focused on a collection of advice.
 
 [source,rust]
 ----
