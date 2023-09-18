@@ -2,7 +2,7 @@
 
 This is a paragraph of text, including **bold** and *italic* text. Also ~~strikethrough~~.
 
-This includes `code` identifiers, and some "quoted text" (including 'single quotes').
+This includes `code + 1` identifiers, and some "quoted text" (including 'single quotes').
 
 This is an inline URL: <https://lurklurk.org>
 
@@ -18,6 +18,7 @@ C++_ focused on a collection of advice.
 
 ```rust
 fn main() {
+  x += 1;
 }
 ```
 

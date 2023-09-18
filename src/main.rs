@@ -279,6 +279,7 @@ impl AsciiDocBackend {
         }
         let mut lists = Vec::new();
         let mut swapped_f = None;
+        let mut escaping_needed = true;
         if let Some(filename) = &ch.path {
             out!(
                 f,
@@ -317,6 +318,7 @@ impl AsciiDocBackend {
                             }
                             outln!(f, "]");
                             outln!(f, "----");
+                            escaping_needed = false;
                         }
                         Tag::List(first_num) => {
                             lists.push(if first_num.is_some() {
@@ -423,6 +425,7 @@ impl AsciiDocBackend {
                         Tag::CodeBlock(_kind) => {
                             outln!(f, "----");
                             crlf!(f);
+                            escaping_needed = true;
                         }
                         Tag::BlockQuote => {}
                         Tag::List(_first_num) => {
@@ -477,7 +480,11 @@ impl AsciiDocBackend {
                     trace!("[MD]{indent}Text({text})");
                     indent.inc();
 
-                    out!(f, "{}", md2ad(text));
+                    if escaping_needed {
+                        out!(f, "{}", md2ad(text));
+                    } else {
+                        out!(f, "{}", text);
+                    }
 
                     indent.dec();
                 }

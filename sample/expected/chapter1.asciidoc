@@ -3,7 +3,7 @@
 
 This is a paragraph of text, including *bold* and _italic_ text. Also [line-through]#strikethrough#.
 
-This includes ``+code+`` identifiers, and some "quoted text" (including 'single quotes').
+This includes ``+code + 1+`` identifiers, and some "quoted text" (including 'single quotes').
 
 This is an inline URL: link:https://lurklurk.org[https://lurklurk.org]
 
@@ -21,6 +21,7 @@ C&plus;&plus;_ focused on a collection of advice.
 [source,rust]
 ----
 fn main() {
+  x += 1;
 }
 ----
 
