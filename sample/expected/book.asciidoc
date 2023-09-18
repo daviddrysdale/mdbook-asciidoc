@@ -1,0 +1,10 @@
+= AsciiDoc Output Sample
+David Drysdale
+:doctype: book
+
+include::partA.asciidoc[leveloffset=+0]
+include::chapter1.asciidoc[leveloffset=+1]
+include::chapter2.asciidoc[leveloffset=+1]
+include::partB.asciidoc[leveloffset=+0]
+include::chapter3.asciidoc[leveloffset=+1]
+include::subdir/chapter4.asciidoc[leveloffset=+1]

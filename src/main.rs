@@ -219,7 +219,7 @@ impl AsciiDocBackend {
         let authors = ctx.config.book.authors;
 
         debug!("Title '{title:?}' description '{description:?}' authors: {authors:?}");
-        let topfilename = self.dest_dir.join("book.adoc");
+        let topfilename = self.dest_dir.join("book.asciidoc");
         let mut topfile = std::fs::File::create(&topfilename).map_err(|e| {
             format!(
                 "Failed to create output file '{}': {:?}",
@@ -539,7 +539,7 @@ impl AsciiDocBackend {
                 // No path, so build one from the chapter name
                 ch.name.to_ascii_lowercase().replace(" ", "_")
             });
-        let filename = filename + ".adoc";
+        let filename = filename + ".asciidoc";
         debug!("basename = {filename}");
 
         // Create the corresponding file in the output directory.
