@@ -2,9 +2,9 @@
 David Drysdale
 :doctype: book
 
-include::partA.adoc[leveloffset=0]
-include::chapter1.adoc[leveloffset=1]
-include::chapter2.adoc[leveloffset=1]
-include::partB.adoc[leveloffset=0]
-include::chapter3.adoc[leveloffset=1]
-include::subdir/chapter4.adoc[leveloffset=1]
+include::partA.adoc[leveloffset=+0]
+include::chapter1.adoc[leveloffset=+1]
+include::chapter2.adoc[leveloffset=+1]
+include::partB.adoc[leveloffset=+0]
+include::chapter3.adoc[leveloffset=+1]
+include::subdir/chapter4.adoc[leveloffset=+1]

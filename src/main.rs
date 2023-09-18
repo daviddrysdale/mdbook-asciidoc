@@ -246,7 +246,7 @@ impl AsciiDocBackend {
             match &item {
                 BookItem::Chapter(ch) => {
                     let (filename, offset) = self.process_chapter(ch)?;
-                    writeln!(topfile, "include::{filename}[leveloffset={offset}]")?;
+                    writeln!(topfile, "include::{filename}[leveloffset={offset:+}]")?;
                 }
                 BookItem::Separator => debug!("Visit separator"),
                 BookItem::PartTitle(title) => debug!("Visit part '{title}'"),
