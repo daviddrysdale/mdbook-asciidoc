@@ -1,6 +1,6 @@
 //! mdbook backend for AsciiDoc generation
 
-use log::{debug, error, info, trace};
+use log::{debug, error, info, trace, warn};
 use mdbook::{
     book::{BookItem, Chapter},
     renderer::RenderContext,
@@ -511,7 +511,15 @@ impl AsciiDocBackend {
                             outln!(f, "'''");
                             crlf!(f);
                         }
-                        _ => error!("Unhandled HTML: {html}"),
+                        "<aside>" => {
+                            outln!(f, "****");
+                            crlf!(f);
+                        }
+                        "</aside>" => {
+                            outln!(f, "****");
+                            crlf!(f);
+                        }
+                        _ => warn!("Unhandled HTML: {html}"),
                     }
                 }
                 Event::FootnoteReference(text) => {
