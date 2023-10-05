@@ -385,6 +385,8 @@ impl AsciiDocBackend {
                         Tag::Link(_link_type, dest_url, _title) => {
                             let mut dest_url = dest_url.to_string();
                             let mut mac = "link";
+                            // Generally want to surround the URL with ++ to prevent interpretation
+                            let mut esc = "++";
                             if let Some(local_file) = url_is_local(&dest_url) {
                                 if local_file.ends_with(".md") {
                                     debug!(
@@ -395,9 +397,11 @@ impl AsciiDocBackend {
                                         local_file.to_string().replace(".", "_")
                                     );
                                     mac = "xref";
+                                    // Putting ++ around xref doesn't appear to work.
+                                    esc = "";
                                 }
                             }
-                            out!(f, "{mac}:{dest_url}[");
+                            out!(f, "{mac}:{esc}{dest_url}{esc}[");
                         }
                         Tag::Image(_link_type, dest_url, _title) => {
                             if f.after_blank() {
