@@ -190,6 +190,7 @@ macro_rules! maybelf {
 }
 
 /// AsciiDoc backend processor.
+#[derive(Debug)]
 struct AsciiDocBackend {
     /// Where to put output.
     pub dest_dir: PathBuf,
@@ -199,6 +200,8 @@ struct AsciiDocBackend {
     allow_asciidoc: bool,
     /// Heading extra offset to apply.
     heading_offset: isize,
+    /// Chapters to skip (by name).
+    skip_chapters: Vec<String>,
 }
 
 impl AsciiDocBackend {
@@ -218,7 +221,16 @@ impl AsciiDocBackend {
         } else {
             0
         };
-        info!("config: allow some embedded AsciiDoc? {allow_asciidoc}; heading extra offset {heading_offset}");
+
+        let skip_chapters =
+            if let Some(toml::Value::String(v)) = ctx.config.get("output.asciidoc.skip-chapters") {
+                v
+            } else {
+                ""
+            }
+            .split(",")
+            .map(|s| s.to_owned())
+            .collect();
 
         let dest_dir = ctx.destination.clone();
         std::fs::create_dir_all(&dest_dir).map_err(|e| {
@@ -231,12 +243,15 @@ impl AsciiDocBackend {
         let mut src_dir = ctx.root.clone();
         src_dir.push(ctx.config.book.src.clone());
 
-        Ok(Self {
+        let backend = Self {
             dest_dir,
             src_dir,
             allow_asciidoc,
             heading_offset,
-        })
+            skip_chapters,
+        };
+        info!("configured {backend:?}");
+        Ok(backend)
     }
 
     /// Process the AsciiDoc document.
@@ -276,6 +291,13 @@ impl AsciiDocBackend {
         for item in ctx.book.iter() {
             match &item {
                 BookItem::Chapter(ch) => {
+                    if let Some(filename) = &ch.path {
+                        let filename = filename.to_str().expect("invalid pathname").to_owned();
+                        if self.skip_chapters.contains(&filename) {
+                            info!("Skipping chapter '{}' due to skip-chapters config", ch.name);
+                            continue;
+                        }
+                    }
                     let (filename, offset) = self.process_chapter(ch)?;
                     writeln!(topfile, "include::{filename}[leveloffset={offset:+}]")?;
                 }
