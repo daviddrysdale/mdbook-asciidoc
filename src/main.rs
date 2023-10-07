@@ -197,6 +197,8 @@ struct AsciiDocBackend {
     src_dir: PathBuf,
     /// Whether to cope with (some) AsciiDoc in the input.
     allow_asciidoc: bool,
+    /// Heading extra offset to apply.
+    heading_offset: isize,
 }
 
 impl AsciiDocBackend {
@@ -209,7 +211,14 @@ impl AsciiDocBackend {
         } else {
             false
         };
-        info!("Allowing some embedded AsciiDoc? {allow_asciidoc}");
+        let heading_offset = if let Some(toml::Value::Integer(v)) =
+            ctx.config.get("output.asciidoc.heading-offset")
+        {
+            *v as isize
+        } else {
+            0
+        };
+        info!("config: allow some embedded AsciiDoc? {allow_asciidoc}; heading extra offset {heading_offset}");
 
         let dest_dir = ctx.destination.clone();
         std::fs::create_dir_all(&dest_dir).map_err(|e| {
@@ -226,6 +235,7 @@ impl AsciiDocBackend {
             dest_dir,
             src_dir,
             allow_asciidoc,
+            heading_offset,
         })
     }
 
@@ -278,10 +288,10 @@ impl AsciiDocBackend {
     }
 
     /// Process a single chapter.
-    fn process_chapter<'a>(&mut self, ch: &Chapter) -> Result<(String, usize), Error> {
+    fn process_chapter<'a>(&mut self, ch: &Chapter) -> Result<(String, isize), Error> {
         use md::{Event, Tag};
         debug!("Visit chapter '{}' from file '{:?}'", ch.name, ch.path);
-        let offset = ch.parent_names.len();
+        let offset = ch.parent_names.len() as isize + self.heading_offset;
 
         let mut f = AsciiDocOutput::default();
         let parser = md::Parser::new_ext(
@@ -325,7 +335,7 @@ impl AsciiDocBackend {
                             };
                             cr!(f);
                             maybelf!(f);
-                            out!(f, "{} ", "=".repeat(level + offset));
+                            out!(f, "{} ", "=".repeat(level));
                         }
                         Tag::BlockQuote => {
                             cr!(f);
