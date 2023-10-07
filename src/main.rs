@@ -335,6 +335,10 @@ impl AsciiDocBackend {
                             };
                             cr!(f);
                             maybelf!(f);
+                            if ch.name == "Preface" && level == 1 {
+                                // Assume a chapter called "Preface" should map to an AsciiDoc preface.
+                                outln!(f, "[preface]");
+                            }
                             out!(f, "{} ", "=".repeat(level));
                         }
                         Tag::BlockQuote => {
