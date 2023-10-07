@@ -920,6 +920,7 @@ name = "mdbook-asciidoc"
 version = "0.1.0"
 dependencies = [
  "env_logger 0.9.3",
+ "lazy_static",
  "log",
  "mdbook",
  "pulldown-cmark",

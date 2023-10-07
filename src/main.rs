@@ -1,13 +1,19 @@
 //! mdbook backend for AsciiDoc generation
 
+use lazy_static::lazy_static;
 use log::{debug, error, info, trace, warn};
 use mdbook::{
     book::{BookItem, Chapter},
     renderer::RenderContext,
 };
 use pulldown_cmark as md;
+use regex::Regex;
 use std::io::Write;
 use std::path::{Path, PathBuf};
+
+lazy_static! {
+    static ref ASCIIDOC_IMAGE_RE: Regex = Regex::new(r"image::(?P<url>\S+)$").unwrap();
+}
 
 /// Main entrypoint for backend.
 fn main() -> Result<(), Error> {
@@ -189,11 +195,22 @@ struct AsciiDocBackend {
     pub dest_dir: PathBuf,
     /// Where to get input.
     src_dir: PathBuf,
+    /// Whether to cope with (some) AsciiDoc in the input.
+    allow_asciidoc: bool,
 }
 
 impl AsciiDocBackend {
     /// Create a new backend, with options populated from the given context.
     pub fn new(ctx: &RenderContext) -> Result<Self, Error> {
+        let allow_asciidoc = if let Some(toml::Value::Boolean(v)) =
+            ctx.config.get("output.asciidoc.allow-asciidoc")
+        {
+            *v
+        } else {
+            false
+        };
+        info!("Allowing some embedded AsciiDoc? {allow_asciidoc}");
+
         let dest_dir = ctx.destination.clone();
         std::fs::create_dir_all(&dest_dir).map_err(|e| {
             format!(
@@ -205,7 +222,11 @@ impl AsciiDocBackend {
         let mut src_dir = ctx.root.clone();
         src_dir.push(ctx.config.book.src.clone());
 
-        Ok(Self { dest_dir, src_dir })
+        Ok(Self {
+            dest_dir,
+            src_dir,
+            allow_asciidoc,
+        })
     }
 
     /// Process the AsciiDoc document.
@@ -484,6 +505,10 @@ impl AsciiDocBackend {
                     trace!("[MD]{indent}Text({text})");
                     indent.inc();
 
+                    if self.allow_asciidoc {
+                        self.process_potential_asciidoc(text);
+                    }
+
                     if escaping_needed {
                         out!(f, "{}", md2ad(text));
                     } else {
@@ -609,6 +634,19 @@ impl AsciiDocBackend {
             std::fs::copy(src_file, dest_file)?;
         }
         Ok(())
+    }
+
+    /// Process raw text from the input that might already contain some
+    /// AsciiDoc.
+    fn process_potential_asciidoc(&self, text: &str) {
+        if let Some(caps) = ASCIIDOC_IMAGE_RE.captures(&text) {
+            if let Some(url) = caps.name("url") {
+                let result = self.copy_file_to_output(url.into());
+                if let Err(e) = result {
+                    error!("Failed to copy possible AsciiDoc-reference image {url:?}: {e:?}");
+                }
+            }
+        }
     }
 }
 
