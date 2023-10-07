@@ -302,7 +302,7 @@ impl AsciiDocBackend {
         let mut swapped_f = None;
         let mut escaping_needed = true;
         if let Some(filename) = &ch.path {
-            out!(
+            outln!(
                 f,
                 "[#file_{}]",
                 filename.display().to_string().replace(".", "_")
