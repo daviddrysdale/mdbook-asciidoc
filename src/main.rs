@@ -13,6 +13,8 @@ use std::path::{Path, PathBuf};
 
 lazy_static! {
     static ref ASCIIDOC_IMAGE_RE: Regex = Regex::new(r"image::(?P<url>\S+)$").unwrap();
+    static ref ASCIIDOC_ESCAPE_RE: Regex =
+        Regex::new(r#"<asciidoc content='(?P<content>[^']+)'"#).unwrap();
 }
 
 /// Main entrypoint for backend.
@@ -563,24 +565,40 @@ impl AsciiDocBackend {
                 Event::Html(text) => {
                     trace!("[MD]{indent}Html({text})");
                     let html = text.to_string();
-                    match html.trim() {
-                        "<br/>" => {
-                            outln!(f, "&nbsp;");
-                            crlf!(f);
+                    let mut done = false;
+                    // Watch out for escaped AsciiDoc.
+                    if self.allow_asciidoc {
+                        if let Some(caps) = ASCIIDOC_ESCAPE_RE.captures(&html) {
+                            let fragment = caps
+                                .name("content")
+                                .expect("found AsciiDoc escape with no content");
+                            let fragment: &str = fragment.into();
+                            debug!("found embedded AsciiDoc '{fragment}'");
+                            self.process_potential_asciidoc(fragment);
+                            out!(f, "{}", fragment);
+                            done = true;
                         }
-                        "<hr/>" => {
-                            outln!(f, "'''");
-                            crlf!(f);
+                    }
+                    if !done {
+                        match html.trim() {
+                            "<br/>" => {
+                                outln!(f, "&nbsp;");
+                                crlf!(f);
+                            }
+                            "<hr/>" => {
+                                outln!(f, "'''");
+                                crlf!(f);
+                            }
+                            "<aside>" => {
+                                outln!(f, "****");
+                                crlf!(f);
+                            }
+                            "</aside>" => {
+                                outln!(f, "****");
+                                crlf!(f);
+                            }
+                            _ => warn!("Unhandled HTML: {html}"),
                         }
-                        "<aside>" => {
-                            outln!(f, "****");
-                            crlf!(f);
-                        }
-                        "</aside>" => {
-                            outln!(f, "****");
-                            crlf!(f);
-                        }
-                        _ => warn!("Unhandled HTML: {html}"),
                     }
                 }
                 Event::FootnoteReference(text) => {
@@ -677,9 +695,11 @@ impl AsciiDocBackend {
     fn process_potential_asciidoc(&self, text: &str) {
         if let Some(caps) = ASCIIDOC_IMAGE_RE.captures(&text) {
             if let Some(url) = caps.name("url") {
-                let result = self.copy_file_to_output(url.into());
+                let url: &str = url.into();
+                debug!("copy file {url} to output directory");
+                let result = self.copy_file_to_output(url);
                 if let Err(e) = result {
-                    error!("Failed to copy possible AsciiDoc-reference image {url:?}: {e:?}");
+                    error!("Failed to copy possible AsciiDoc-reference image {url}: {e:?}");
                 }
             }
         }
