@@ -1,5 +1,5 @@
 [#file_chapter3_md]
-== Chapter 3
+= Chapter 3
 
 Explicit HTML.  First some line breaks.
 

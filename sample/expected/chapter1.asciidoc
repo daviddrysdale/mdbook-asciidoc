@@ -1,13 +1,13 @@
 [#file_chapter1_md]
-== Title of First Chapter
+= Title of First Chapter
 
 This is a paragraph of text, including *bold* and _italic_ text. Also [line-through]#strikethrough#.
 
 This includes ``+code + 1+`` identifiers, and some "quoted text" (including 'single quotes').
 
-This is an inline URL: link:https://lurklurk.org[https://lurklurk.org]
+This is an inline URL: link:++https://lurklurk.org++[https://lurklurk.org]
 
-This is link:https://github.com/daviddrysdale/mdbook-docbook[link].
+This is link:++https://github.com/daviddrysdale/mdbook-docbook++[link].
 
 [quote]
 This is a block quote, including
@@ -50,7 +50,7 @@ A MarkDown table.
 
 | normal| left-align| center| right
 
-| ``+code+``| link:http://example.com[link]| | left _blank_
+| ``+code+``| link:++http://example.com++[link]| | left _blank_
 |===
 
 List with checkboxes:
