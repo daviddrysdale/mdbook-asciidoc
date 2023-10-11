@@ -500,6 +500,7 @@ impl AsciiDocBackend {
                         }
                         Tag::List(_first_num) => {
                             lists.pop().expect("leaving a list when not in one!");
+                            crlf!(f);
                         }
                         Tag::Item => {
                             crlf!(f);
