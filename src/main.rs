@@ -368,6 +368,7 @@ impl AsciiDocBackend {
                         Tag::BlockQuote => {
                             cr!(f);
                             outln!(f, "[quote]");
+                            outln!(f, "____");
                         }
                         Tag::CodeBlock(kind) => {
                             cr!(f);
@@ -490,7 +491,10 @@ impl AsciiDocBackend {
                             crlf!(f);
                             escaping_needed = true;
                         }
-                        Tag::BlockQuote => {}
+                        Tag::BlockQuote => {
+                            cr!(f);
+                            outln!(f, "____");
+                        }
                         Tag::List(_first_num) => {
                             lists.pop().expect("leaving a list when not in one!");
                         }
