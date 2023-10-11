@@ -381,12 +381,15 @@ impl AsciiDocBackend {
                             escaping_needed = false;
                         }
                         Tag::List(first_num) => {
-                            lists.push(if first_num.is_some() {
+                            lists.push(if let Some(first) = first_num {
+                                if *first != 1 {
+                                    debug!("numbered list starting at {first}");
+                                    outln!(f, "[start={first}]");
+                                }
                                 List::Numbered
                             } else {
                                 List::Unnumbered
                             });
-                            // TODO: cope with ordered lists not starting at 1
                         }
                         Tag::Item => {
                             let indent = lists.len();
