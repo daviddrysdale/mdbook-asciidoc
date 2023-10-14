@@ -8,6 +8,7 @@ use mdbook::{
 };
 use pulldown_cmark as md;
 use regex::Regex;
+use std::collections::HashSet;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
@@ -15,6 +16,21 @@ lazy_static! {
     static ref ASCIIDOC_IMAGE_RE: Regex = Regex::new(r"image::?(?P<url>[a-zA-Z0-9_/.]+)").unwrap();
     static ref ASCIIDOC_ESCAPE_RE: Regex =
         Regex::new(r#"<asciidoc content='(?P<content>[^']+)'"#).unwrap();
+    /// Tags attached to code blocks that should be ignored.
+    static ref IGNORED_CODE_TAGS: HashSet<&'static str> = HashSet::from([
+        "ignore",
+    ]);
+    /// Tags attached to code blocks that identify languages.
+    static ref LANGUAGES: HashSet<&'static str> = HashSet::from([
+        // Extras
+        "text", "c++", "toml",
+        // List from mdbook supported languages
+        "apache", "armasm", "bash", "c", "coffeescript", "cpp", "csharp", "css", "d", "diff", "go",
+        "handlebars", "haskell", "http", "ini", "java", "javascript", "json", "julia", "kotlin",
+        "less", "lua", "makefile", "markdown", "nginx", "objectivec", "perl", "php", "plaintext",
+        "properties", "python", "r", "ruby", "rust", "scala", "scss", "shell", "sql", "swift",
+        "typescript", "x86asm", "xml", "yaml",
+    ]);
 }
 
 /// Main entrypoint for backend.
@@ -374,7 +390,36 @@ impl AsciiDocBackend {
                             cr!(f);
                             out!(f, "[source");
                             if let md::CodeBlockKind::Fenced(lang) = kind {
-                                out!(f, ",{lang}");
+                                let tags: Vec<&str> = lang.split(",").collect();
+                                // Only insert the tags that look like languages into the AsciiDoc
+                                let lang_tags: Vec<&str> = tags
+                                    .iter()
+                                    .filter_map(|s| {
+                                        if LANGUAGES.contains(*s) {
+                                            Some(*s)
+                                        } else {
+                                            None
+                                        }
+                                    })
+                                    .collect();
+                                let langs = lang_tags.join(",");
+                                let other_tags: Vec<&str> = tags
+                                    .iter()
+                                    .filter_map(|s| {
+                                        if LANGUAGES.contains(*s) {
+                                            None
+                                        } else if IGNORED_CODE_TAGS.contains(*s) {
+                                            None
+                                        } else {
+                                            Some(*s)
+                                        }
+                                    })
+                                    .collect();
+                                if !other_tags.is_empty() {
+                                    // TODO: figure out how to pass additional non-language tags through
+                                    debug!("apply extra code tags {other_tags:?} as classes");
+                                }
+                                out!(f, ",{langs}");
                             }
                             outln!(f, "]");
                             outln!(f, "----");
