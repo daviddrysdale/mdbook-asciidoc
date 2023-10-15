@@ -657,6 +657,12 @@ impl AsciiDocBackend {
                                 outln!(f, "****");
                                 crlf!(f);
                             }
+                            "<sup>" | "</sup>" => {
+                                out!(f, "^");
+                            }
+                            "<sub>" | "</sub>" => {
+                                out!(f, "~");
+                            }
                             _ => warn!("Unhandled HTML: {html}"),
                         }
                     }
