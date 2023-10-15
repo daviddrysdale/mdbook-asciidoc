@@ -485,7 +485,8 @@ impl AsciiDocBackend {
                             out!(f, "_");
                         }
                         Tag::Strong => {
-                            out!(f, "*");
+                            // Use double asterisk so that mid-*wo*rd bold works.
+                            out!(f, "**");
                         }
                         Tag::Strikethrough => {
                             out!(f, "[line-through]#");
@@ -576,7 +577,7 @@ impl AsciiDocBackend {
                             out!(f, "_");
                         }
                         Tag::Strong => {
-                            out!(f, "*");
+                            out!(f, "**");
                         }
                         Tag::Strikethrough => {
                             out!(f, "#");
