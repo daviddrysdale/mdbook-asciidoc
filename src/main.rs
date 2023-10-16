@@ -306,6 +306,7 @@ impl AsciiDocBackend {
         writeln!(topfile, ":doctype: book")?;
         writeln!(topfile, "")?;
 
+        let mut need_numbering_reset = false;
         for item in ctx.book.iter() {
             match &item {
                 BookItem::Chapter(ch) => {
@@ -317,7 +318,15 @@ impl AsciiDocBackend {
                         }
                     }
                     let (filename, offset) = self.process_chapter(ch)?;
+                    if need_numbering_reset {
+                        writeln!(topfile, r#"[role="pagenumrestart"]"#)?;
+                        need_numbering_reset = false;
+                    }
                     writeln!(topfile, "include::{filename}[leveloffset={offset:+}]")?;
+                    if ch.name == "Preface" {
+                        // Reset page numbering after processing a preface.
+                        need_numbering_reset = true;
+                    }
                 }
                 BookItem::Separator => debug!("Visit separator"),
                 BookItem::PartTitle(title) => debug!("Visit part '{title}'"),
