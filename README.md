@@ -26,3 +26,15 @@ The following configuration values can be set in `book.toml`.
 | `allow-asciidoc` | boolean | false | Cope with some AsciiDoc constructs included in the Markdown source when set. |
 | `heading-offset` | integer | 0     | Extra offset to apply to heading levels.                                     |
 | `skip-chapters`  | string  | ""    | Comma-separated list of filenames to ignore when generating AsciiDoc.        |
+
+### AsciiDoc Passthrough
+
+When the `allow-asciidoc` config option is set, AsciiDoc in the source document can be included as the `content`
+attribute of an `<asciidoc>` HTML-like tag, to prevent it being interpreted by Markdown.
+
+For example, four underscores are used in AsciiDoc to delimit block quotations, but would also be interpreted as a
+horizontal rule in Markdown if not escaped:
+
+```html
+    <asciidoc content='____'></asciidoc>
+```
