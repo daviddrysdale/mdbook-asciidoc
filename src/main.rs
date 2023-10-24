@@ -687,7 +687,7 @@ impl AsciiDocBackend {
                                     let comment = comment.replace("\n", " ");
                                     outln!(f, "// {comment}");
                                 } else {
-                                    warn!("Unhandled HTML: {html}")
+                                    warn!("Unhandled HTML: {html} in {:?} ({:?})", ch.path, ch.name)
                                 }
                             }
                         }
