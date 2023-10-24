@@ -12,6 +12,9 @@ use std::collections::HashSet;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
+#[cfg(test)]
+mod tests;
+
 lazy_static! {
     static ref ASCIIDOC_IMAGE_RE: Regex = Regex::new(r"image::?(?P<url>[a-zA-Z0-9_/.]+)").unwrap();
     static ref ASCIIDOC_ESCAPE_RE: Regex =
@@ -835,64 +838,4 @@ fn md2ad(v: &str) -> String {
 
 fn footnote_marker(v: &str) -> String {
     format!("TODO-footnote-text-{v}")
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_url_is_local() {
-        let tests = [
-            ("src/file", Some("src/file")),
-            ("./src/file", Some("src/file")),
-            ("src/subdir/file", Some("src/subdir/file")),
-            ("src/subdir/", None),
-            ("/root/subdir/file", None),
-            ("http://example.com/file", None),
-        ];
-        for (input, want) in tests {
-            let want = want.map(|s| s.to_string());
-            let got = url_is_local(input);
-            assert_eq!(got, want, "Failed for input '{input}'");
-        }
-    }
-
-    #[test]
-    fn test_image_re() {
-        let tests = [
-            ("blah", None),
-            ("image:: mentioned", None),
-            (
-                r#"image:images/does_not_compile.svg["Red cross",100,]"#,
-                Some("images/does_not_compile.svg"),
-            ),
-            (
-                r#"prefix then image:images/does_not_compile.svg["Red cross",100,]"#,
-                Some("images/does_not_compile.svg"),
-            ),
-            ("image::images/draw.svg", Some("images/draw.svg")),
-            (
-                r#"prefix then image:images/does_not_compile.svg["Red cross",100,]"#,
-                Some("images/does_not_compile.svg"),
-            ),
-            (
-                "prefix then image::images/draw.svg",
-                Some("images/draw.svg"),
-            ),
-        ];
-        for (input, want) in tests {
-            let got = if let Some(caps) = ASCIIDOC_IMAGE_RE.captures(&input) {
-                if let Some(url) = caps.name("url") {
-                    let url: &str = url.into();
-                    Some(url)
-                } else {
-                    None
-                }
-            } else {
-                None
-            };
-            assert_eq!(got, want, "Failed for input '{input}'");
-        }
-    }
 }
