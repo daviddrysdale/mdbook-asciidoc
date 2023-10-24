@@ -56,3 +56,22 @@ fn test_image_re() {
         assert_eq!(got, want, "Failed for input '{input}'");
     }
 }
+
+#[test]
+fn test_unicode_char() {
+    let tests = [
+        ("abc", "abc"),
+        ("", ""),
+        ("U+0020", " "),
+        ("U+020", "U+020"),
+        ("U+02G", "U+02G"),
+        ("U+002G", "U+002G"),
+        ("U+23AE", "⎮"),
+        ("U+23ae", "⎮"),
+        ("only first char U+0020", "only first char U+0020"),
+    ];
+    for (input, want) in tests {
+        let got = transmute_unicode(input);
+        assert_eq!(got, want, "Failed for input '{input}'");
+    }
+}

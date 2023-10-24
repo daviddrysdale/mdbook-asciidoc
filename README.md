@@ -26,6 +26,7 @@ The following configuration values can be set in `book.toml`.
 | `allow-asciidoc` | boolean | false | Cope with some AsciiDoc constructs included in the Markdown source when set. |
 | `heading-offset` | integer | 0     | Extra offset to apply to heading levels.                                     |
 | `skip-chapters`  | string  | ""    | Comma-separated list of filenames to ignore when generating AsciiDoc.        |
+| `unicode-subst`  | map<string,string> | empty | Map Unicode characters (either as-is or in U+1234 form) to replacements. |
 
 ### AsciiDoc Passthrough
 

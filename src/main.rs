@@ -8,7 +8,7 @@ use mdbook::{
 };
 use pulldown_cmark as md;
 use regex::Regex;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
@@ -21,7 +21,10 @@ lazy_static! {
     /// Regexp to match the invented tag used to transmit raw AsciiDoc.
     static ref ASCIIDOC_ESCAPE_RE: Regex =
         Regex::new(r#"<asciidoc content='(?P<content>[^']+)'"#).unwrap();
+    /// Regexp to match HTML comments.
     static ref HTML_COMMENT_RE : Regex = Regex::new(r#"<!--\s*(?P<comment>.*?)\s*-->"#).unwrap();
+    /// Regexp to match Unicode U+1234 expressions.
+    static ref UNICODE_CHAR_RE: Regex = Regex::new(r#"^U\+(?P<code>[0-9a-fA-F]{4})(?P<rest>.*)$"#).unwrap();
     /// Tags attached to code blocks that should be ignored.
     static ref IGNORED_CODE_TAGS: HashSet<&'static str> = HashSet::from([
         "ignore",
@@ -226,6 +229,8 @@ struct AsciiDocBackend {
     heading_offset: isize,
     /// Chapters to skip (by name).
     skip_chapters: Vec<String>,
+    /// Unicode character substitutions.  Keys and values are a single char.
+    unicode_subst: HashMap<String, String>,
 }
 
 impl AsciiDocBackend {
@@ -256,6 +261,43 @@ impl AsciiDocBackend {
             .map(|s| s.to_owned())
             .collect();
 
+        let mut unicode_subst = HashMap::new();
+        if let Some(toml::Value::Table(table)) = ctx.config.get("output.asciidoc.unicode-subst") {
+            for (key, val) in table {
+                if let toml::Value::String(value) = val {
+                    let key = transmute_unicode(key);
+                    let value = transmute_unicode(value);
+                    let mut srcs = key.chars();
+                    let mut dests = value.chars();
+
+                    let src = match (srcs.next(), srcs.next()) {
+                        (Some(v), None) => v,
+                        (Some(c1), Some(c2)) => {
+                            log::error!("Expect a single Unicode char as unicode-subst source, got '{c1}' '{c2}'...");
+                            continue;
+                        }
+                        (None, _) => {
+                            log::error!("Expect a single Unicode char as unicode-subst source, got empty string");
+                            continue;
+                        }
+                    };
+                    let dest = match (dests.next(), dests.next()) {
+                        (Some(v), None) => v,
+                        (Some(c1), Some(c2)) => {
+                            log::error!("Expect a single Unicode char as unicode-subst dest, got '{c1}' '{c2}'...");
+                            continue;
+                        }
+                        (None, _) => {
+                            log::error!("Expect a single Unicode char as unicode-subst dest, got empty string");
+                            continue;
+                        }
+                    };
+                    log::info!("Map unicode '{src}' to '{dest}'");
+                    unicode_subst.insert(format!("{src}"), format!("{dest}"));
+                }
+            }
+        }
+
         let dest_dir = ctx.destination.clone();
         std::fs::create_dir_all(&dest_dir).map_err(|e| {
             format!(
@@ -273,6 +315,7 @@ impl AsciiDocBackend {
             allow_asciidoc,
             heading_offset,
             skip_chapters,
+            unicode_subst,
         };
         info!("configured {backend:?}");
         Ok(backend)
@@ -610,14 +653,15 @@ impl AsciiDocBackend {
                 }
                 Event::Text(text) => {
                     trace!("[MD]{indent}Text({text})");
+                    let text = self.replace_unicode(text);
                     indent.inc();
 
                     if self.allow_asciidoc {
-                        self.process_potential_asciidoc(text);
+                        self.process_potential_asciidoc(&text);
                     }
 
                     if escaping_needed {
-                        out!(f, "{}", md2ad(text));
+                        out!(f, "{}", md2ad(&text));
                     } else {
                         out!(f, "{}", text);
                     }
@@ -626,6 +670,7 @@ impl AsciiDocBackend {
                 }
                 Event::Code(text) => {
                     trace!("[MD]{indent}Code({text})");
+                    let text = self.replace_unicode(text);
                     if text.contains("+") {
                         // - Double-backtick allows use in positions without surrounding space.
                         // - Passthrough macro because the text has plus signs in it.
@@ -782,8 +827,7 @@ impl AsciiDocBackend {
         Ok(())
     }
 
-    /// Process raw text from the input that might already contain some
-    /// AsciiDoc.
+    /// Process raw text from the input that might already contain some AsciiDoc.
     fn process_potential_asciidoc(&self, text: &str) {
         if let Some(caps) = ASCIIDOC_IMAGE_RE.captures(&text) {
             if let Some(url) = caps.name("url") {
@@ -795,6 +839,18 @@ impl AsciiDocBackend {
                 }
             }
         }
+    }
+
+    /// Perform Unicode character substitution on the text.
+    fn replace_unicode(&self, input: &str) -> String {
+        let mut text = input.to_string();
+        for (src, dest) in &self.unicode_subst {
+            text = text.replace(src, dest);
+        }
+        if text != input {
+            log::info!("Replaced '{input}' with '{text}' due to Unicode substitution");
+        }
+        text
     }
 }
 
@@ -852,4 +908,17 @@ fn md2ad(v: &str) -> String {
 
 fn footnote_marker(v: &str) -> String {
     format!("TODO-footnote-text-{v}")
+}
+
+/// Convert a "U+1234" unicode code point description into a Unicode char.
+fn transmute_unicode(text: &str) -> String {
+    if let Some(caps) = UNICODE_CHAR_RE.captures(text) {
+        let code = caps.name("code").unwrap();
+        let code = u32::from_str_radix(code.into(), 16).unwrap();
+        let code = char::from_u32(code).unwrap();
+        let rest: &str = caps.name("rest").unwrap().into();
+        format!("{code}{rest}")
+    } else {
+        text.to_string()
+    }
 }
