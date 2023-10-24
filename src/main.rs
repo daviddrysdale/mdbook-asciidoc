@@ -408,7 +408,8 @@ impl AsciiDocBackend {
         }
         let mut lists = Vec::new();
         let mut swapped_f = None;
-        let mut escaping_needed = true;
+        let mut in_code_block = false;
+        let mut in_table = false;
         if let Some(filename) = &ch.path {
             outln!(
                 f,
@@ -481,7 +482,7 @@ impl AsciiDocBackend {
                             }
                             outln!(f, "]");
                             outln!(f, "----");
-                            escaping_needed = false;
+                            in_code_block = true;
                         }
                         Tag::List(first_num) => {
                             lists.push(if let Some(first) = first_num {
@@ -535,6 +536,7 @@ impl AsciiDocBackend {
                             crlf!(f);
                         }
                         Tag::TableCell => {
+                            in_table = true;
                             out!(f, "| ");
                         }
 
@@ -596,7 +598,7 @@ impl AsciiDocBackend {
                         Tag::CodeBlock(_kind) => {
                             outln!(f, "----");
                             crlf!(f);
-                            escaping_needed = true;
+                            in_code_block = false;
                         }
                         Tag::BlockQuote => {
                             cr!(f);
@@ -628,7 +630,9 @@ impl AsciiDocBackend {
                             crlf!(f);
                         }
                         Tag::TableHead | Tag::TableRow => {}
-                        Tag::TableCell => {}
+                        Tag::TableCell => {
+                            in_table = false;
+                        }
 
                         // Inline elements
                         Tag::Emphasis => {
@@ -653,24 +657,33 @@ impl AsciiDocBackend {
                 }
                 Event::Text(text) => {
                     trace!("[MD]{indent}Text({text})");
-                    let text = self.replace_unicode(text);
                     indent.inc();
+                    let mut text = self.replace_unicode(text);
+                    if in_table {
+                        // Escape any vertical bars while in a table.
+                        text = text.replace("|", "\\|");
+                    }
 
                     if self.allow_asciidoc {
                         self.process_potential_asciidoc(&text);
                     }
 
-                    if escaping_needed {
-                        out!(f, "{}", md2ad(&text));
-                    } else {
+                    if in_code_block {
                         out!(f, "{}", text);
+                    } else {
+                        // Outside of a code block, escape special characters in general.
+                        out!(f, "{}", md2ad(&text));
                     }
 
                     indent.dec();
                 }
                 Event::Code(text) => {
                     trace!("[MD]{indent}Code({text})");
-                    let text = self.replace_unicode(text);
+                    let mut text = self.replace_unicode(text);
+                    if in_table {
+                        // Escape any vertical bars while in a table.
+                        text = text.replace("|", "\\|");
+                    }
                     if text.contains("+") {
                         // - Double-backtick allows use in positions without surrounding space.
                         // - Passthrough macro because the text has plus signs in it.
