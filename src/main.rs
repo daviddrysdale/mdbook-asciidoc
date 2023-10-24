@@ -16,9 +16,12 @@ use std::path::{Path, PathBuf};
 mod tests;
 
 lazy_static! {
+    /// Regexp to match AsciiDoc images.
     static ref ASCIIDOC_IMAGE_RE: Regex = Regex::new(r"image::?(?P<url>[a-zA-Z0-9_/.]+)").unwrap();
+    /// Regexp to match the invented tag used to transmit raw AsciiDoc.
     static ref ASCIIDOC_ESCAPE_RE: Regex =
         Regex::new(r#"<asciidoc content='(?P<content>[^']+)'"#).unwrap();
+    static ref HTML_COMMENT_RE : Regex = Regex::new(r#"<!--\s*(?P<comment>.*?)\s*-->"#).unwrap();
     /// Tags attached to code blocks that should be ignored.
     static ref IGNORED_CODE_TAGS: HashSet<&'static str> = HashSet::from([
         "ignore",
@@ -675,7 +678,18 @@ impl AsciiDocBackend {
                             "<sub>" | "</sub>" => {
                                 out!(f, "~");
                             }
-                            _ => warn!("Unhandled HTML: {html}"),
+                            html => {
+                                if let Some(caps) = HTML_COMMENT_RE.captures(&html) {
+                                    let comment: &str = caps
+                                        .name("comment")
+                                        .expect("HTML comment content missing")
+                                        .into();
+                                    let comment = comment.replace("\n", " ");
+                                    outln!(f, "// {comment}");
+                                } else {
+                                    warn!("Unhandled HTML: {html}")
+                                }
+                            }
                         }
                     }
                 }
