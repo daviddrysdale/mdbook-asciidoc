@@ -474,11 +474,12 @@ impl AsciiDocBackend {
                                         }
                                     })
                                     .collect();
-                                if !other_tags.is_empty() {
-                                    // TODO: figure out how to pass additional non-language tags through
-                                    debug!("apply extra code tags {other_tags:?} as classes");
-                                }
                                 out!(f, ",{langs}");
+                                if !other_tags.is_empty() {
+                                    let extras = other_tags.join(",");
+                                    debug!("apply extra code tags '{extras}' as named attribute");
+                                    out!(f, ",extras=\"{extras}\"")
+                                }
                             }
                             outln!(f, "]");
                             outln!(f, "----");
