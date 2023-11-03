@@ -231,6 +231,8 @@ struct AsciiDocBackend {
     skip_chapters: Vec<String>,
     /// Unicode character substitutions.  Keys and values are a single char.
     unicode_subst: HashMap<String, String>,
+    /// Map from style=>blockname for additional wrapping of code blocks.
+    code_block_wrap: HashMap<String, String>,
 }
 
 impl AsciiDocBackend {
@@ -298,6 +300,18 @@ impl AsciiDocBackend {
             }
         }
 
+        let mut code_block_wrap = HashMap::new();
+        if let Some(toml::Value::Table(table)) = ctx.config.get("output.asciidoc.code-block-wrap") {
+            for (key, val) in table {
+                if let toml::Value::String(val) = val {
+                    log::info!("Will wrap code blocks marked with '{key}' in a '{val}' block");
+                    code_block_wrap.insert(key.to_string(), val.to_string());
+                } else {
+                    log::error!("Ignoring non-string value ({val:?}) for code-block-wrap");
+                }
+            }
+        }
+
         let dest_dir = ctx.destination.clone();
         std::fs::create_dir_all(&dest_dir).map_err(|e| {
             format!(
@@ -316,6 +330,7 @@ impl AsciiDocBackend {
             heading_offset,
             skip_chapters,
             unicode_subst,
+            code_block_wrap,
         };
         info!("configured {backend:?}");
         Ok(backend)
@@ -408,7 +423,7 @@ impl AsciiDocBackend {
         }
         let mut lists = Vec::new();
         let mut swapped_f = None;
-        let mut in_code_block = false;
+        let mut in_code_block = InCodeBlock::False;
         let mut in_table = false;
         if let Some(filename) = &ch.path {
             outln!(
@@ -447,7 +462,8 @@ impl AsciiDocBackend {
                         }
                         Tag::CodeBlock(kind) => {
                             cr!(f);
-                            out!(f, "[source");
+                            in_code_block = InCodeBlock::Normal;
+                            let mut attrs = "".to_string();
                             if let md::CodeBlockKind::Fenced(lang) = kind {
                                 let tags: Vec<&str> = lang.split(",").collect();
                                 // Only insert the tags that look like languages into the AsciiDoc
@@ -474,16 +490,25 @@ impl AsciiDocBackend {
                                         }
                                     })
                                     .collect();
-                                out!(f, ",{langs}");
+                                attrs += &format!(",{langs}");
                                 if !other_tags.is_empty() {
                                     let extras = other_tags.join(",");
                                     debug!("apply extra code tags '{extras}' as named attribute");
-                                    out!(f, ",extras=\"{extras}\"")
+                                    attrs += &format!(",extras=\"{extras}\"");
+                                    // Find the first of `other_tags` that has an associated code block wrapper.
+                                    let block_wrapper = other_tags
+                                        .iter()
+                                        .find_map(|tag| self.code_block_wrap.get(*tag));
+                                    if let Some(block) = block_wrapper {
+                                        log::debug!("code with {extras} triggers {block} wrapper");
+                                        outln!(f, "[{block}]\n====");
+                                        in_code_block = InCodeBlock::Wrapped;
+                                    }
                                 }
                             }
+                            out!(f, "[source{attrs}");
                             outln!(f, "]");
                             outln!(f, "----");
-                            in_code_block = true;
                         }
                         Tag::List(first_num) => {
                             lists.push(if let Some(first) = first_num {
@@ -598,8 +623,11 @@ impl AsciiDocBackend {
                         }
                         Tag::CodeBlock(_kind) => {
                             outln!(f, "----");
+                            if in_code_block == InCodeBlock::Wrapped {
+                                outln!(f, "====");
+                            }
                             crlf!(f);
-                            in_code_block = false;
+                            in_code_block = InCodeBlock::False;
                         }
                         Tag::BlockQuote => {
                             cr!(f);
@@ -669,7 +697,7 @@ impl AsciiDocBackend {
                         self.process_potential_asciidoc(&text);
                     }
 
-                    if in_code_block {
+                    if in_code_block != InCodeBlock::False {
                         out!(f, "{}", text);
                     } else {
                         // Outside of a code block, escape special characters in general.
@@ -891,6 +919,13 @@ fn url_is_local(url: &str) -> Option<String> {
             Some(url.to_string())
         }
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum InCodeBlock {
+    False,
+    Normal,
+    Wrapped,
 }
 
 struct Indent(usize);
