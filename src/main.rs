@@ -9,6 +9,7 @@ use mdbook::{
 use pulldown_cmark as md;
 use regex::Regex;
 use std::collections::{HashMap, HashSet};
+use std::ffi::OsStr;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
@@ -865,6 +866,17 @@ impl AsciiDocBackend {
             dest_file.push(path);
             debug!("[AD] cp {} {}", src_file.display(), dest_file.display());
             std::fs::copy(src_file, dest_file)?;
+
+            // If the file looks like an SVG file, attempt to copy an equivalent PNG file too.
+            if path.extension() == Some(OsStr::new("svg")) {
+                let png_path = path.with_extension("png");
+                let mut src_file = self.src_dir.clone();
+                src_file.push(png_path.clone());
+                let mut dest_file = self.dest_dir.clone();
+                dest_file.push(png_path);
+                debug!("[AD] cp {} {}", src_file.display(), dest_file.display());
+                let _ = std::fs::copy(src_file, dest_file);
+            }
         }
         Ok(())
     }
