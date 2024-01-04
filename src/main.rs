@@ -454,6 +454,11 @@ impl AsciiDocBackend {
                                 // Assume a chapter called "Preface" should map to an AsciiDoc preface.
                                 outln!(f, "[preface]");
                             }
+                            if ch.name == "Afterword" && level == 1 {
+                                // Assume a chapter called "Afterword" should map to an AsciiDoc afterword.
+                                outln!(f, "[appendix]");
+                                outln!(f, r#"[role="afterword"]"#);
+                            }
                             out!(f, "{} ", "=".repeat(level));
                         }
                         Tag::BlockQuote => {
