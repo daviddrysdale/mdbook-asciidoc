@@ -623,25 +623,7 @@ impl AsciiDocBackend {
                             out!(f, "[line-through]#");
                         }
                         Tag::Link(_link_type, dest_url, _title) => {
-                            let mut dest_url = dest_url.to_string();
-                            let mut mac = "link";
-                            // Generally want to surround the URL with ++ to prevent interpretation
-                            let mut esc = "++";
-                            if let Some(local_file) = url_is_local(&dest_url) {
-                                if local_file.ends_with(".md") {
-                                    debug!(
-                                        "transform target '{local_file}' of link into local xref"
-                                    );
-                                    dest_url = format!(
-                                        "file_{}",
-                                        local_file.to_string().replace('.', "_")
-                                    );
-                                    mac = "xref";
-                                    // Putting ++ around xref doesn't appear to work.
-                                    esc = "";
-                                }
-                            }
-                            out!(f, "{mac}:{esc}{dest_url}{esc}[");
+                            self.link_before(&mut f, dest_url);
                         }
                         Tag::Image(_link_type, dest_url, _title) => {
                             if f.after_blank() {
@@ -725,7 +707,7 @@ impl AsciiDocBackend {
                             out!(f, "#");
                         }
                         Tag::Link(_link_type, _dest_url, _title) => {
-                            out!(f, "]");
+                            self.link_after(&mut f);
                         }
                         Tag::Image(_link_type, _dest_url, title) => {
                             if !title.is_empty() {
@@ -955,6 +937,29 @@ impl AsciiDocBackend {
             log::info!("Replaced '{input}' with '{text}' due to Unicode substitution");
         }
         text
+    }
+
+    /// Emit AsciiDoc before a link.
+    fn link_before(&self, f: &mut AsciiDocOutput, dest_url: &str) {
+        let mut dest_url = dest_url.to_string();
+        let mut mac = "link";
+        // Generally want to surround the URL with ++ to prevent interpretation
+        let mut esc = "++";
+        if let Some(local_file) = url_is_local(&dest_url) {
+            if local_file.ends_with(".md") {
+                debug!("transform target '{local_file}' of link into local xref");
+                dest_url = format!("file_{}", local_file.replace('.', "_"));
+                mac = "xref";
+                // Putting ++ around xref doesn't appear to work.
+                esc = "";
+            }
+        }
+        out!(f, "{mac}:{esc}{dest_url}{esc}[");
+    }
+
+    /// Emit AsciiDoc after a link.
+    fn link_after(&self, f: &mut AsciiDocOutput) {
+        out!(f, "]");
     }
 }
 
