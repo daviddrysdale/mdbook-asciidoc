@@ -156,10 +156,10 @@ impl AsciiDocOutput {
             Strip::TrailingWhitespace => to.trim_end(),
         };
         for line in &mut self.prev_lines {
-            let newline = line.replace(from, &to);
+            let newline = line.replace(from, to);
             let _ = std::mem::replace(line, newline);
         }
-        self.cur_line = self.cur_line.replace(from, &to);
+        self.cur_line = self.cur_line.replace(from, to);
     }
 
     fn write_to<T: std::io::Write>(&self, out: &mut T) -> Result<(), Error> {
@@ -260,7 +260,7 @@ impl AsciiDocBackend {
             } else {
                 ""
             }
-            .split(",")
+            .split(',')
             .map(|s| s.to_owned())
             .collect();
 
@@ -366,10 +366,10 @@ impl AsciiDocBackend {
             first = false;
         }
         if !first {
-            writeln!(topfile, "")?;
+            writeln!(topfile)?;
         }
         writeln!(topfile, ":doctype: book")?;
-        writeln!(topfile, "")?;
+        writeln!(topfile)?;
 
         let mut need_numbering_reset = false;
         for item in ctx.book.iter() {
@@ -402,7 +402,7 @@ impl AsciiDocBackend {
     }
 
     /// Process a single chapter.
-    fn process_chapter<'a>(&mut self, ch: &Chapter) -> Result<(String, isize), Error> {
+    fn process_chapter(&mut self, ch: &Chapter) -> Result<(String, isize), Error> {
         use md::{Event, Tag};
         debug!("Visit chapter '{}' from file '{:?}'", ch.name, ch.path);
         let offset = ch.parent_names.len() as isize + self.heading_offset;
@@ -430,7 +430,7 @@ impl AsciiDocBackend {
             outln!(
                 f,
                 "[#file_{}]",
-                filename.display().to_string().replace(".", "_")
+                filename.display().to_string().replace('.', "_")
             );
         }
         for event in parser {
@@ -471,7 +471,7 @@ impl AsciiDocBackend {
                             in_code_block = InCodeBlock::Normal;
                             let mut attrs = "".to_string();
                             if let md::CodeBlockKind::Fenced(lang) = kind {
-                                let tags: Vec<&str> = lang.split(",").collect();
+                                let tags: Vec<&str> = lang.split(',').collect();
                                 // Only insert the tags that look like languages into the AsciiDoc
                                 let lang_tags: Vec<&str> = tags
                                     .iter()
@@ -487,9 +487,9 @@ impl AsciiDocBackend {
                                 let other_tags: Vec<&str> = tags
                                     .iter()
                                     .filter_map(|s| {
-                                        if LANGUAGES.contains(*s) {
-                                            None
-                                        } else if IGNORED_CODE_TAGS.contains(*s) {
+                                        if LANGUAGES.contains(*s) || IGNORED_CODE_TAGS.contains(*s)
+                                        {
+                                            // Ignore language markers and tags explicitly configured to be ignored.
                                             None
                                         } else {
                                             Some(*s)
@@ -595,7 +595,7 @@ impl AsciiDocBackend {
                                     );
                                     dest_url = format!(
                                         "file_{}",
-                                        local_file.to_string().replace(".", "_")
+                                        local_file.to_string().replace('.', "_")
                                     );
                                     mac = "xref";
                                     // Putting ++ around xref doesn't appear to work.
@@ -696,7 +696,7 @@ impl AsciiDocBackend {
                     let mut text = self.replace_unicode(text);
                     if in_table {
                         // Escape any vertical bars while in a table.
-                        text = text.replace("|", "\\|");
+                        text = text.replace('|', "\\|");
                     }
 
                     if self.allow_asciidoc {
@@ -717,9 +717,9 @@ impl AsciiDocBackend {
                     let mut text = self.replace_unicode(text);
                     if in_table {
                         // Escape any vertical bars while in a table.
-                        text = text.replace("|", "\\|");
+                        text = text.replace('|', "\\|");
                     }
-                    if text.contains("+") {
+                    if text.contains('+') {
                         // - Double-backtick allows use in positions without surrounding space.
                         // - Passthrough macro because the text has plus signs in it.
                         out!(f, "``pass:[{text}]``");
@@ -772,12 +772,12 @@ impl AsciiDocBackend {
                                 out!(f, "~");
                             }
                             html => {
-                                if let Some(caps) = HTML_COMMENT_RE.captures(&html) {
+                                if let Some(caps) = HTML_COMMENT_RE.captures(html) {
                                     let comment: &str = caps
                                         .name("comment")
                                         .expect("HTML comment content missing")
                                         .into();
-                                    let comment = comment.replace("\n", " ");
+                                    let comment = comment.replace('\n', " ");
                                     outln!(f, "// {comment}");
                                 } else {
                                     warn!("Unhandled HTML: {html} in {:?} ({:?})", ch.path, ch.name)
@@ -820,7 +820,7 @@ impl AsciiDocBackend {
             })
             .unwrap_or_else(|| {
                 // No path, so build one from the chapter name
-                ch.name.to_ascii_lowercase().replace(" ", "_")
+                ch.name.to_ascii_lowercase().replace(' ', "_")
             });
         let filename = filename + ".asciidoc";
         debug!("basename = {filename}");
@@ -829,7 +829,7 @@ impl AsciiDocBackend {
         let outfilename = self.dest_dir.join(filename.clone());
         let dest_dir = Path::new(&outfilename).parent().unwrap();
         debug!("mkdir -p {dest_dir:?}");
-        std::fs::create_dir_all(&dest_dir).map_err(|e| {
+        std::fs::create_dir_all(dest_dir).map_err(|e| {
             format!(
                 "Failed to create output directory '{}': {:?}",
                 dest_dir.display(),
@@ -888,7 +888,7 @@ impl AsciiDocBackend {
 
     /// Process raw text from the input that might already contain some AsciiDoc.
     fn process_potential_asciidoc(&self, text: &str) {
-        if let Some(caps) = ASCIIDOC_IMAGE_RE.captures(&text) {
+        if let Some(caps) = ASCIIDOC_IMAGE_RE.captures(text) {
             if let Some(url) = caps.name("url") {
                 let url: &str = url.into();
                 debug!("copy file {url} to output directory");
@@ -923,15 +923,13 @@ fn url_is_local(url: &str) -> Option<String> {
             None
         }
     } else {
-        if url.starts_with("/") {
-            // Leave absolute paths alone.
+        // Did not parse as a URL.
+        if url.starts_with('/') || url.ends_with('/') {
+            // Leave absolute paths and directories alone.
             None
-        } else if url.ends_with("/") {
-            // Leave directories alone.
-            None
-        } else if url.starts_with("./") {
+        } else if let Some(stripped) = url.strip_prefix("./") {
             // Strip leading dot-slash.
-            Some(url[2..].to_string())
+            Some(stripped.to_string())
         } else {
             Some(url.to_string())
         }
@@ -969,7 +967,7 @@ impl std::fmt::Display for Indent {
 /// Convert MarkDown text with no (MarkDown) special chars into AsciiDoc text with no AsciiDoc special chars.
 fn md2ad(v: &str) -> String {
     // A '+' means something in AsciiDoc but not in MarkDown; use the HTML escape code instead.
-    v.replace("+", "&#43;")
+    v.replace('+', "&#43;")
 }
 
 fn footnote_marker(v: &str) -> String {

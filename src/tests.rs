@@ -43,7 +43,7 @@ fn test_image_re() {
         ),
     ];
     for (input, want) in tests {
-        let got = if let Some(caps) = ASCIIDOC_IMAGE_RE.captures(&input) {
+        let got = if let Some(caps) = ASCIIDOC_IMAGE_RE.captures(input) {
             if let Some(url) = caps.name("url") {
                 let url: &str = url.into();
                 Some(url)
