@@ -319,6 +319,7 @@ impl AsciiDocBackend {
         let link_mode =
             if let Some(toml::Value::String(m)) = ctx.config.get("output.asciidoc.link-mode") {
                 match m.as_str() {
+                    "default" => LinkMode::Inline,
                     "after" => LinkMode::After(Self::link_after),
                     "shorten" => LinkMode::After(Self::selective_shorten),
                     _ => panic!("Unrecognized link-mode flag {m}"),

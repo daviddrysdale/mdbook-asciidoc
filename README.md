@@ -27,6 +27,8 @@ The following configuration values can be set in `book.toml`.
 | `heading-offset` | integer | 0     | Extra offset to apply to heading levels.                                     |
 | `skip-chapters`  | string  | ""    | Comma-separated list of filenames to ignore when generating AsciiDoc.        |
 | `unicode-subst`  | map<string,string> | empty | Map Unicode characters (either as-is or in U+1234 form) to replacements. |
+| `link-mode`      | string  | "default" | How to render external links ("default"=as-is, "shorten"=via `short-links` table. |
+| `short-links`    | map<string, string> | empty | Map from long to short URLs.  In `shorten` mode, links not in this table will be skipped. |
 
 ### AsciiDoc Passthrough
 
