@@ -100,12 +100,39 @@ enum Strip {
     TrailingWhitespace,
 }
 
+/// What kind of list processing is currently inside.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum List {
+    Unnumbered,
+    Numbered,
+}
+
+/// What kind of rendering is processing currently inside.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Render {
+    Italic,
+    Bold,
+    Strikethrough,
+    Table,
+    CodeBlock(CodeBlock),
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum CodeBlock {
+    Normal,
+    Wrapped,
+}
+
 #[derive(Clone, Default)]
 struct AsciiDocOutput {
     /// Line-by-line content.
     prev_lines: Vec<String>,
     /// Current line being accumulated.
     cur_line: String,
+    /// Current stack of lists.
+    lists: Vec<List>,
+    /// Current stack of render modes.
+    modes: Vec<Render>,
 }
 
 impl AsciiDocOutput {
@@ -168,6 +195,22 @@ impl AsciiDocOutput {
         }
         writeln!(out, "{}", self.cur_line)?;
         Ok(())
+    }
+
+    fn current_list(&self) -> List {
+        assert!(!self.lists.is_empty(), "not in a list!");
+        self.lists[self.lists.len() - 1]
+    }
+
+    fn in_table(&self) -> bool {
+        self.modes.contains(&Render::Table)
+    }
+
+    fn code_block(&self) -> Option<CodeBlock> {
+        self.modes.iter().rev().find_map(|mode| match mode {
+            Render::CodeBlock(c) => Some(*c),
+            _ => None,
+        })
     }
 }
 
@@ -417,15 +460,7 @@ impl AsciiDocBackend {
                 | md::Options::ENABLE_HEADING_ATTRIBUTES,
         );
         let mut indent = Indent::new(1);
-        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-        enum List {
-            Unnumbered,
-            Numbered,
-        }
-        let mut lists = Vec::new();
         let mut swapped_f = None;
-        let mut in_code_block = InCodeBlock::False;
-        let mut in_table = false;
         if let Some(filename) = &ch.path {
             outln!(
                 f,
@@ -468,7 +503,7 @@ impl AsciiDocBackend {
                         }
                         Tag::CodeBlock(kind) => {
                             cr!(f);
-                            in_code_block = InCodeBlock::Normal;
+                            let mut code_block = CodeBlock::Normal;
                             let mut attrs = "".to_string();
                             if let md::CodeBlockKind::Fenced(lang) = kind {
                                 let tags: Vec<&str> = lang.split(',').collect();
@@ -508,16 +543,17 @@ impl AsciiDocBackend {
                                     if let Some(block) = block_wrapper {
                                         log::debug!("code with {extras} triggers {block} wrapper");
                                         outln!(f, "[{block}]\n====");
-                                        in_code_block = InCodeBlock::Wrapped;
+                                        code_block = CodeBlock::Wrapped;
                                     }
                                 }
                             }
+                            f.modes.push(Render::CodeBlock(code_block));
                             out!(f, "[source{attrs}");
                             outln!(f, "]");
                             outln!(f, "----");
                         }
                         Tag::List(first_num) => {
-                            lists.push(if let Some(first) = first_num {
+                            let list = if let Some(first) = first_num {
                                 if *first != 1 {
                                     debug!("numbered list starting at {first}");
                                     outln!(f, "[start={first}]");
@@ -525,12 +561,12 @@ impl AsciiDocBackend {
                                 List::Numbered
                             } else {
                                 List::Unnumbered
-                            });
+                            };
+                            f.lists.push(list);
                         }
                         Tag::Item => {
-                            let indent = lists.len();
-                            assert!(indent > 0);
-                            let lead = match lists[indent - 1] {
+                            let indent = f.lists.len();
+                            let lead = match f.current_list() {
                                 List::Numbered => ".",
                                 List::Unnumbered => "*",
                             };
@@ -568,19 +604,22 @@ impl AsciiDocBackend {
                             crlf!(f);
                         }
                         Tag::TableCell => {
-                            in_table = true;
+                            f.modes.push(Render::Table);
                             out!(f, "| ");
                         }
 
                         // Inline elements
                         Tag::Emphasis => {
+                            f.modes.push(Render::Italic);
                             out!(f, "_");
                         }
                         Tag::Strong => {
                             // Use double asterisk so that mid-*wo*rd bold works.
+                            f.modes.push(Render::Bold);
                             out!(f, "**");
                         }
                         Tag::Strikethrough => {
+                            f.modes.push(Render::Strikethrough);
                             out!(f, "[line-through]#");
                         }
                         Tag::Link(_link_type, dest_url, _title) => {
@@ -628,19 +667,22 @@ impl AsciiDocBackend {
                             crlf!(f); // Additional blank line.
                         }
                         Tag::CodeBlock(_kind) => {
+                            let mode = match f.modes.pop() {
+                                Some(Render::CodeBlock(m)) => m,
+                                m => panic!("Unexpected last mode {m:?}"),
+                            };
                             outln!(f, "----");
-                            if in_code_block == InCodeBlock::Wrapped {
+                            if mode == CodeBlock::Wrapped {
                                 outln!(f, "====");
                             }
                             crlf!(f);
-                            in_code_block = InCodeBlock::False;
                         }
                         Tag::BlockQuote => {
                             cr!(f);
                             outln!(f, "____");
                         }
                         Tag::List(_first_num) => {
-                            lists.pop().expect("leaving a list when not in one!");
+                            f.lists.pop().expect("leaving a list when not in one!");
                             crlf!(f);
                         }
                         Tag::Item => {
@@ -666,17 +708,20 @@ impl AsciiDocBackend {
                         }
                         Tag::TableHead | Tag::TableRow => {}
                         Tag::TableCell => {
-                            in_table = false;
+                            assert_eq!(f.modes.pop(), Some(Render::Table));
                         }
 
                         // Inline elements
                         Tag::Emphasis => {
+                            assert_eq!(f.modes.pop(), Some(Render::Italic));
                             out!(f, "_");
                         }
                         Tag::Strong => {
+                            assert_eq!(f.modes.pop(), Some(Render::Bold));
                             out!(f, "**");
                         }
                         Tag::Strikethrough => {
+                            assert_eq!(f.modes.pop(), Some(Render::Strikethrough));
                             out!(f, "#");
                         }
                         Tag::Link(_link_type, _dest_url, _title) => {
@@ -694,7 +739,7 @@ impl AsciiDocBackend {
                     trace!("[MD]{indent}Text({text})");
                     indent.inc();
                     let mut text = self.replace_unicode(text);
-                    if in_table {
+                    if f.in_table() {
                         // Escape any vertical bars while in a table.
                         text = text.replace('|', "\\|");
                     }
@@ -703,11 +748,11 @@ impl AsciiDocBackend {
                         self.process_potential_asciidoc(&text);
                     }
 
-                    if in_code_block != InCodeBlock::False {
-                        out!(f, "{}", text);
-                    } else {
+                    if f.code_block().is_none() {
                         // Outside of a code block, escape special characters in general.
                         out!(f, "{}", md2ad(&text));
+                    } else {
+                        out!(f, "{}", text);
                     }
 
                     indent.dec();
@@ -715,7 +760,7 @@ impl AsciiDocBackend {
                 Event::Code(text) => {
                     trace!("[MD]{indent}Code({text})");
                     let mut text = self.replace_unicode(text);
-                    if in_table {
+                    if f.in_table() {
                         // Escape any vertical bars while in a table.
                         text = text.replace('|', "\\|");
                     }
@@ -934,13 +979,6 @@ fn url_is_local(url: &str) -> Option<String> {
             Some(url.to_string())
         }
     }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum InCodeBlock {
-    False,
-    Normal,
-    Wrapped,
 }
 
 struct Indent(usize);
