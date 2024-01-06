@@ -260,6 +260,18 @@ macro_rules! maybelf {
     }};
 }
 
+/// How to render hyperlinks.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+enum LinkMode {
+    /// Render same as in the MarkDown (the text itself is a link).
+    /// Invisible in printed output.
+    #[default]
+    Inline,
+    /// Render after the text with the link, transforming the URL
+    /// with the given function (which should output AsciiDoc).
+    After(fn(&str) -> String),
+}
+
 /// AsciiDoc backend processor.
 #[derive(Debug)]
 struct AsciiDocBackend {
@@ -277,6 +289,8 @@ struct AsciiDocBackend {
     unicode_subst: HashMap<String, String>,
     /// Map from style=>blockname for additional wrapping of code blocks.
     code_block_wrap: HashMap<String, String>,
+    /// How to map links.
+    link_mode: LinkMode,
 }
 
 impl AsciiDocBackend {
@@ -296,6 +310,15 @@ impl AsciiDocBackend {
         } else {
             0
         };
+        let link_mode =
+            if let Some(toml::Value::String(m)) = ctx.config.get("output.asciidoc.link-mode") {
+                match m.as_str() {
+                    "after" => LinkMode::After(link_after),
+                    _ => panic!("Unrecognized link-mode flag {m}"),
+                }
+            } else {
+                LinkMode::default()
+            };
 
         let skip_chapters =
             if let Some(toml::Value::String(v)) = ctx.config.get("output.asciidoc.skip-chapters") {
@@ -375,6 +398,7 @@ impl AsciiDocBackend {
             skip_chapters,
             unicode_subst,
             code_block_wrap,
+            link_mode,
         };
         info!("configured {backend:?}");
         Ok(backend)
@@ -706,8 +730,8 @@ impl AsciiDocBackend {
                             assert_eq!(f.modes.pop(), Some(Render::Strikethrough));
                             out!(f, "#");
                         }
-                        Tag::Link(_link_type, _dest_url, _title) => {
-                            self.link_after(&mut f);
+                        Tag::Link(_link_type, dest_url, _title) => {
+                            self.link_after(&mut f, dest_url);
                         }
                         Tag::Image(_link_type, _dest_url, title) => {
                             if !title.is_empty() {
@@ -941,26 +965,49 @@ impl AsciiDocBackend {
 
     /// Emit AsciiDoc before a link.
     fn link_before(&self, f: &mut AsciiDocOutput, dest_url: &str) {
-        let mut dest_url = dest_url.to_string();
-        let mut mac = "link";
-        // Generally want to surround the URL with ++ to prevent interpretation
-        let mut esc = "++";
-        if let Some(local_file) = url_is_local(&dest_url) {
-            if local_file.ends_with(".md") {
+        if let Some(local_file) = url_is_local(dest_url) {
+            // Generally want to surround the URL with ++ to prevent interpretation.
+            let mut dest_url = dest_url.to_string();
+            let (mac, esc) = if local_file.ends_with(".md") {
+                // However, putting ++ around xref doesn't appear to work.
                 debug!("transform target '{local_file}' of link into local xref");
                 dest_url = format!("file_{}", local_file.replace('.', "_"));
-                mac = "xref";
-                // Putting ++ around xref doesn't appear to work.
-                esc = "";
+                ("xref", "")
+            } else {
+                ("link", "++")
+            };
+            out!(f, "{mac}:{esc}{dest_url}{esc}[");
+        } else {
+            // URL is not a local file.
+            match self.link_mode {
+                LinkMode::Inline => {
+                    out!(f, "link:++{dest_url}++[");
+                }
+                LinkMode::After(_) => {
+                    // Link processing happens at end link, so do nothing.
+                }
             }
         }
-        out!(f, "{mac}:{esc}{dest_url}{esc}[");
     }
 
     /// Emit AsciiDoc after a link.
-    fn link_after(&self, f: &mut AsciiDocOutput) {
-        out!(f, "]");
+    fn link_after(&self, f: &mut AsciiDocOutput, dest_url: &str) {
+        if url_is_local(dest_url).is_some() {
+            out!(f, "]")
+        } else {
+            // URL is not a local file.
+            match self.link_mode {
+                LinkMode::Inline => out!(f, "]"),
+                LinkMode::After(emitter) => {
+                    out!(f, "{}", emitter(dest_url));
+                }
+            }
+        }
     }
+}
+
+fn link_after(url: &str) -> String {
+    format!(" (link:++{url}++[_++{url}++_])")
 }
 
 /// Determine if a URL refers to a local file, and if so return the local path.
