@@ -273,7 +273,7 @@ enum LinkMode {
     Inline,
     /// Render after the text with the link, transforming the URL
     /// with the given function (which should output AsciiDoc).
-    After(fn(&AsciiDocOutput, &str) -> String),
+    After(fn(&AsciiDocBackend, &AsciiDocOutput, &str) -> String),
 }
 
 /// AsciiDoc backend processor.
@@ -295,6 +295,8 @@ struct AsciiDocBackend {
     code_block_wrap: HashMap<String, String>,
     /// How to map links.
     link_mode: LinkMode,
+    /// Link shortening table.
+    short_links: HashMap<String, String>,
 }
 
 impl AsciiDocBackend {
@@ -317,13 +319,25 @@ impl AsciiDocBackend {
         let link_mode =
             if let Some(toml::Value::String(m)) = ctx.config.get("output.asciidoc.link-mode") {
                 match m.as_str() {
-                    "after" => LinkMode::After(link_after),
-                    "shorten" => LinkMode::After(selective_shorten),
+                    "after" => LinkMode::After(Self::link_after),
+                    "shorten" => LinkMode::After(Self::selective_shorten),
                     _ => panic!("Unrecognized link-mode flag {m}"),
                 }
             } else {
                 LinkMode::default()
             };
+
+        let mut short_links = HashMap::new();
+        if let Some(toml::Value::Table(table)) = ctx.config.get("output.asciidoc.url-shorten") {
+            for (key, val) in table {
+                if let toml::Value::String(val) = val {
+                    log::info!("Shorten URL {key} to {val}");
+                    short_links.insert(key.to_string(), val.to_string());
+                } else {
+                    log::error!("Ignoring non-string value ({val:?}) for url-shorten");
+                }
+            }
+        }
 
         let skip_chapters =
             if let Some(toml::Value::String(v)) = ctx.config.get("output.asciidoc.skip-chapters") {
@@ -404,6 +418,7 @@ impl AsciiDocBackend {
             unicode_subst,
             code_block_wrap,
             link_mode,
+            short_links,
         };
         info!("configured {backend:?}");
         Ok(backend)
@@ -652,7 +667,7 @@ impl AsciiDocBackend {
                             out!(f, "[line-through]#");
                         }
                         Tag::Link(_link_type, dest_url, _title) => {
-                            self.link_before(&mut f, dest_url);
+                            self.emit_link_before(&mut f, dest_url);
                         }
                         Tag::Image(_link_type, dest_url, _title) => {
                             if f.after_blank() {
@@ -736,7 +751,7 @@ impl AsciiDocBackend {
                             out!(f, "#");
                         }
                         Tag::Link(_link_type, dest_url, _title) => {
-                            self.link_after(&mut f, dest_url);
+                            self.emit_link_after(&mut f, dest_url);
                         }
                         Tag::Image(_link_type, _dest_url, title) => {
                             if !title.is_empty() {
@@ -969,7 +984,7 @@ impl AsciiDocBackend {
     }
 
     /// Emit AsciiDoc before a link.
-    fn link_before(&self, f: &mut AsciiDocOutput, dest_url: &str) {
+    fn emit_link_before(&self, f: &mut AsciiDocOutput, dest_url: &str) {
         if let Some(local_file) = url_is_local(dest_url) {
             // Generally want to surround the URL with ++ to prevent interpretation.
             let mut dest_url = dest_url.to_string();
@@ -996,7 +1011,7 @@ impl AsciiDocBackend {
     }
 
     /// Emit AsciiDoc after a link.
-    fn link_after(&self, f: &mut AsciiDocOutput, dest_url: &str) {
+    fn emit_link_after(&self, f: &mut AsciiDocOutput, dest_url: &str) {
         if url_is_local(dest_url).is_some() {
             out!(f, "]")
         } else {
@@ -1004,27 +1019,31 @@ impl AsciiDocBackend {
             match self.link_mode {
                 LinkMode::Inline => out!(f, "]"),
                 LinkMode::After(emitter) => {
-                    out!(f, "{}", emitter(f, dest_url));
+                    out!(f, "{}", emitter(self, f, dest_url));
                 }
             }
         }
     }
-}
 
-/// Transform a URL into AsciiDoc text to be inserted after the link source.
-fn link_after(_f: &AsciiDocOutput, url: &str) -> String {
-    format!(" (link:++{url}++[_++{url}++_])")
-}
+    /// Transform a URL into AsciiDoc text to be inserted after the link source.
+    fn link_after(&self, _f: &AsciiDocOutput, url: &str) -> String {
+        format!(" (link:++{url}++[_++{url}++_])")
+    }
 
-/// Transform a URL into AsciiDoc text to be inserted after the link source, but
-/// only if the URL has a short equivalent.
-fn selective_shorten(f: &AsciiDocOutput, url: &str) -> String {
-    let short_url = "https://oreil.ly/a2b3e";
-    // TODO: use short URL as link destination too
-    if f.in_italics() {
-        format!(" (link:++{url}++[{short_url}])")
-    } else {
-        format!(" (link:++{url}++[_{short_url}_])")
+    /// Transform a URL into AsciiDoc text to be inserted after the link source, but
+    /// only if the URL has a short equivalent.
+    fn selective_shorten(&self, f: &AsciiDocOutput, url: &str) -> String {
+        debug!("Attempt to shorten {url}");
+        if let Some(short_url) = self.short_links.get(url) {
+            debug!("Shortened {url} to {short_url}");
+            if f.in_italics() {
+                format!(" (link:++{short_url}++[{short_url}])")
+            } else {
+                format!(" (link:++{short_url}++[_{short_url}_])")
+            }
+        } else {
+            "".to_string()
+        }
     }
 }
 
