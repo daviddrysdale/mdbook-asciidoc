@@ -206,6 +206,10 @@ impl AsciiDocOutput {
         self.modes.contains(&Render::Table)
     }
 
+    fn in_italics(&self) -> bool {
+        self.modes.contains(&Render::Italic)
+    }
+
     fn code_block(&self) -> Option<CodeBlock> {
         self.modes.iter().rev().find_map(|mode| match mode {
             Render::CodeBlock(c) => Some(*c),
@@ -269,7 +273,7 @@ enum LinkMode {
     Inline,
     /// Render after the text with the link, transforming the URL
     /// with the given function (which should output AsciiDoc).
-    After(fn(&str) -> String),
+    After(fn(&AsciiDocOutput, &str) -> String),
 }
 
 /// AsciiDoc backend processor.
@@ -314,6 +318,7 @@ impl AsciiDocBackend {
             if let Some(toml::Value::String(m)) = ctx.config.get("output.asciidoc.link-mode") {
                 match m.as_str() {
                     "after" => LinkMode::After(link_after),
+                    "shorten" => LinkMode::After(selective_shorten),
                     _ => panic!("Unrecognized link-mode flag {m}"),
                 }
             } else {
@@ -999,15 +1004,28 @@ impl AsciiDocBackend {
             match self.link_mode {
                 LinkMode::Inline => out!(f, "]"),
                 LinkMode::After(emitter) => {
-                    out!(f, "{}", emitter(dest_url));
+                    out!(f, "{}", emitter(f, dest_url));
                 }
             }
         }
     }
 }
 
-fn link_after(url: &str) -> String {
+/// Transform a URL into AsciiDoc text to be inserted after the link source.
+fn link_after(_f: &AsciiDocOutput, url: &str) -> String {
     format!(" (link:++{url}++[_++{url}++_])")
+}
+
+/// Transform a URL into AsciiDoc text to be inserted after the link source, but
+/// only if the URL has a short equivalent.
+fn selective_shorten(f: &AsciiDocOutput, url: &str) -> String {
+    let short_url = "https://oreil.ly/a2b3e";
+    // TODO: use short URL as link destination too
+    if f.in_italics() {
+        format!(" (link:++{url}++[{short_url}])")
+    } else {
+        format!(" (link:++{url}++[_{short_url}_])")
+    }
 }
 
 /// Determine if a URL refers to a local file, and if so return the local path.
