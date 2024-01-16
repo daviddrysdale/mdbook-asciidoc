@@ -264,6 +264,9 @@ macro_rules! maybelf {
     }};
 }
 
+type RenderAfterLink = fn(&AsciiDocBackend, &AsciiDocOutput, &str) -> String;
+type ShouldRenderAfter = fn(&AsciiDocBackend, &str) -> bool;
+
 /// How to render hyperlinks.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 enum LinkMode {
@@ -273,7 +276,11 @@ enum LinkMode {
     Inline,
     /// Render after the text with the link, transforming the URL
     /// with the given function (which should output AsciiDoc).
-    After(fn(&AsciiDocBackend, &AsciiDocOutput, &str) -> String),
+    After(RenderAfterLink),
+    /// Render links differently depending on the result of the first function.
+    /// - `true`: render links after the text using the given function (like `After`).
+    /// - `false`: render links inline with the text (like `Inline`)
+    Both(ShouldRenderAfter, RenderAfterLink),
 }
 
 /// AsciiDoc backend processor.
@@ -322,6 +329,7 @@ impl AsciiDocBackend {
                     "default" => LinkMode::Inline,
                     "after" => LinkMode::After(Self::link_after),
                     "shorten" => LinkMode::After(Self::selective_shorten),
+                    "shorten-some" => LinkMode::Both(Self::has_short_url, Self::selective_shorten),
                     _ => panic!("Unrecognized link-mode flag {m}"),
                 }
             } else {
@@ -987,6 +995,7 @@ impl AsciiDocBackend {
     /// Emit AsciiDoc before a link.
     fn emit_link_before(&self, f: &mut AsciiDocOutput, dest_url: &str) {
         if let Some(local_file) = url_is_local(dest_url) {
+            trace!("start link {dest_url} is local at {local_file}");
             // Generally want to surround the URL with ++ to prevent interpretation.
             let mut dest_url = dest_url.to_string();
             let (mac, esc) = if local_file.ends_with(".md") {
@@ -1000,13 +1009,17 @@ impl AsciiDocBackend {
             out!(f, "{mac}:{esc}{dest_url}{esc}[");
         } else {
             // URL is not a local file.
-            match self.link_mode {
-                LinkMode::Inline => {
-                    out!(f, "link:++{dest_url}++[");
-                }
-                LinkMode::After(_) => {
-                    // Link processing happens at end link, so do nothing.
-                }
+            let after = match self.link_mode {
+                LinkMode::Inline => false,
+                LinkMode::After(_) => true,
+                LinkMode::Both(has_short_url, _) => has_short_url(self, dest_url),
+            };
+            if after {
+                trace!("link {dest_url} happens after");
+                // Link processing happens at end link, so do nothing.
+            } else {
+                trace!("start inline link {dest_url}");
+                out!(f, "link:++{dest_url}++[");
             }
         }
     }
@@ -1014,14 +1027,27 @@ impl AsciiDocBackend {
     /// Emit AsciiDoc after a link.
     fn emit_link_after(&self, f: &mut AsciiDocOutput, dest_url: &str) {
         if url_is_local(dest_url).is_some() {
+            trace!("end link {dest_url} is local");
             out!(f, "]")
         } else {
             // URL is not a local file.
-            match self.link_mode {
-                LinkMode::Inline => out!(f, "]"),
-                LinkMode::After(emitter) => {
-                    out!(f, "{}", emitter(self, f, dest_url));
+            let emitter = match self.link_mode {
+                LinkMode::Inline => None,
+                LinkMode::After(emitter) => Some(emitter),
+                LinkMode::Both(has_short_url, emitter) => {
+                    if has_short_url(self, dest_url) {
+                        Some(emitter)
+                    } else {
+                        None
+                    }
                 }
+            };
+            if let Some(emitter) = emitter {
+                trace!("end link {dest_url} via transform");
+                out!(f, "{}", emitter(self, f, dest_url));
+            } else {
+                trace!("end link {dest_url} quietly");
+                out!(f, "]");
             }
         }
     }
@@ -1045,6 +1071,13 @@ impl AsciiDocBackend {
         } else {
             "".to_string()
         }
+    }
+
+    /// Indicate whether there's a short version of the given URL available.
+    fn has_short_url(&self, url: &str) -> bool {
+        let result = self.short_links.get(url).is_some();
+        trace!("Does {url} have a short form? {result}");
+        result
     }
 }
 
