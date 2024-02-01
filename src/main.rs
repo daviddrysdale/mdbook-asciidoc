@@ -300,6 +300,8 @@ struct AsciiDocBackend {
     unicode_subst: HashMap<String, String>,
     /// Map from style=>blockname for additional wrapping of code blocks.
     code_block_wrap: HashMap<String, String>,
+    /// Delimiter for additional wrapping of code blocks.
+    code_block_wrap_delimiter: String,
     /// How to map links.
     link_mode: LinkMode,
     /// Link shortening table.
@@ -406,6 +408,13 @@ impl AsciiDocBackend {
                 }
             }
         }
+        let code_block_wrap_delimiter = if let Some(toml::Value::String(w)) =
+            ctx.config.get("output.asciidoc.code-block-wrap-delimiter")
+        {
+            w.to_string()
+        } else {
+            "====".to_string()
+        };
 
         let dest_dir = ctx.destination.clone();
         std::fs::create_dir_all(&dest_dir).map_err(|e| {
@@ -426,6 +435,7 @@ impl AsciiDocBackend {
             skip_chapters,
             unicode_subst,
             code_block_wrap,
+            code_block_wrap_delimiter,
             link_mode,
             short_links,
         };
@@ -595,7 +605,8 @@ impl AsciiDocBackend {
                                         .find_map(|tag| self.code_block_wrap.get(*tag));
                                     if let Some(block) = block_wrapper {
                                         log::debug!("code with {extras} triggers {block} wrapper");
-                                        outln!(f, "[{block}]\n====");
+                                        let delimiter = &self.code_block_wrap_delimiter;
+                                        outln!(f, "[{block}]\n{delimiter}");
                                         code_block = CodeBlock::Wrapped;
                                     }
                                 }
@@ -708,7 +719,8 @@ impl AsciiDocBackend {
                             };
                             outln!(f, "----");
                             if mode == CodeBlock::Wrapped {
-                                outln!(f, "====");
+                                let delimiter = &self.code_block_wrap_delimiter;
+                                outln!(f, "{delimiter}");
                             }
                             crlf!(f);
                         }
