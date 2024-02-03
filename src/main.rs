@@ -115,6 +115,7 @@ enum Render {
     Strikethrough,
     Table,
     CodeBlock(CodeBlock),
+    Heading,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -208,6 +209,10 @@ impl AsciiDocOutput {
 
     fn in_italics(&self) -> bool {
         self.modes.contains(&Render::Italic)
+    }
+
+    fn in_header(&self) -> bool {
+        self.modes.contains(&Render::Heading)
     }
 
     fn code_block(&self) -> Option<CodeBlock> {
@@ -306,6 +311,8 @@ struct AsciiDocBackend {
     link_mode: LinkMode,
     /// Link shortening table.
     short_links: HashMap<String, String>,
+    /// Omit links in headers.
+    omit_heading_links: bool,
 }
 
 impl AsciiDocBackend {
@@ -416,6 +423,14 @@ impl AsciiDocBackend {
             "====".to_string()
         };
 
+        let omit_heading_links = if let Some(toml::Value::Boolean(v)) =
+            ctx.config.get("output.asciidoc.omit-heading-links")
+        {
+            *v
+        } else {
+            false
+        };
+
         let dest_dir = ctx.destination.clone();
         std::fs::create_dir_all(&dest_dir).map_err(|e| {
             format!(
@@ -438,6 +453,7 @@ impl AsciiDocBackend {
             code_block_wrap_delimiter,
             link_mode,
             short_links,
+            omit_heading_links,
         };
         info!("configured {backend:?}");
         Ok(backend)
@@ -546,6 +562,7 @@ impl AsciiDocBackend {
                                 md::HeadingLevel::H5 => 5,
                                 md::HeadingLevel::H6 => 6,
                             };
+                            f.modes.push(Render::Heading);
                             cr!(f);
                             maybelf!(f);
                             if ch.name == "Preface" && level == 1 {
@@ -687,7 +704,11 @@ impl AsciiDocBackend {
                             out!(f, "[line-through]#");
                         }
                         Tag::Link(_link_type, dest_url, _title) => {
-                            self.emit_link_before(&mut f, dest_url);
+                            if f.in_header() && self.omit_heading_links {
+                                debug!("Skip link '{dest_url}' in header");
+                            } else {
+                                self.emit_link_before(&mut f, dest_url);
+                            }
                         }
                         Tag::Image(_link_type, dest_url, _title) => {
                             if f.after_blank() {
@@ -708,7 +729,12 @@ impl AsciiDocBackend {
                     indent.dec();
                     trace!("[MD]{indent}End({tag:?})");
                     match tag {
-                        Tag::Paragraph | Tag::Heading(_, _, _) => {
+                        Tag::Paragraph => {
+                            cr!(f); // End the current in-progress line.
+                            crlf!(f); // Additional blank line.
+                        }
+                        Tag::Heading(_, _, _) => {
+                            assert_eq!(f.modes.pop(), Some(Render::Heading));
                             cr!(f); // End the current in-progress line.
                             crlf!(f); // Additional blank line.
                         }
@@ -772,7 +798,11 @@ impl AsciiDocBackend {
                             out!(f, "#");
                         }
                         Tag::Link(_link_type, dest_url, _title) => {
-                            self.emit_link_after(&mut f, dest_url);
+                            if f.in_header() && self.omit_heading_links {
+                                debug!("Skip link '{dest_url}' in header");
+                            } else {
+                                self.emit_link_after(&mut f, dest_url);
+                            }
                         }
                         Tag::Image(_link_type, _dest_url, title) => {
                             if !title.is_empty() {
