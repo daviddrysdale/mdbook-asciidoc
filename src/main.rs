@@ -313,6 +313,8 @@ struct AsciiDocBackend {
     short_links: HashMap<String, String>,
     /// Omit links in headers.
     omit_heading_links: bool,
+    /// Filename substitution.
+    filename_subst: HashMap<String, String>,
 }
 
 impl AsciiDocBackend {
@@ -431,6 +433,18 @@ impl AsciiDocBackend {
             false
         };
 
+        let mut filename_subst = HashMap::new();
+        if let Some(toml::Value::Table(table)) = ctx.config.get("output.asciidoc.file-rename") {
+            for (key, val) in table {
+                if let toml::Value::String(val) = val {
+                    log::info!("Rename file '{key}' to '{val}'");
+                    filename_subst.insert(key.to_string(), val.to_string());
+                } else {
+                    log::error!("Ignoring non-string value ({val:?}) for file-rename");
+                }
+            }
+        }
+
         let dest_dir = ctx.destination.clone();
         std::fs::create_dir_all(&dest_dir).map_err(|e| {
             format!(
@@ -454,6 +468,7 @@ impl AsciiDocBackend {
             link_mode,
             short_links,
             omit_heading_links,
+            filename_subst,
         };
         info!("configured {backend:?}");
         Ok(backend)
@@ -944,6 +959,7 @@ impl AsciiDocBackend {
                 // No path, so build one from the chapter name
                 ch.name.to_ascii_lowercase().replace(' ', "_")
             });
+        let filename = self.fsubst(&filename);
         let filename = filename + ".asciidoc";
         debug!("basename = {filename}");
 
@@ -1120,6 +1136,15 @@ impl AsciiDocBackend {
         let result = self.short_links.get(url).is_some();
         trace!("Does {url} have a short form? {result}");
         result
+    }
+
+    /// Optionally map a filename.
+    fn fsubst(&self, filename: &str) -> String {
+        if let Some(new_name) = self.filename_subst.get(filename) {
+            new_name.to_string()
+        } else {
+            filename.to_string()
+        }
     }
 }
 
