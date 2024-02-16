@@ -116,6 +116,7 @@ enum Render {
     Table,
     CodeBlock(CodeBlock),
     Heading,
+    Link,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -213,6 +214,10 @@ impl AsciiDocOutput {
 
     fn in_header(&self) -> bool {
         self.modes.contains(&Render::Heading)
+    }
+
+    fn in_link(&self) -> bool {
+        self.modes.contains(&Render::Link)
     }
 
     fn code_block(&self) -> Option<CodeBlock> {
@@ -313,6 +318,8 @@ struct AsciiDocBackend {
     short_links: HashMap<String, String>,
     /// Omit links in headers.
     omit_heading_links: bool,
+    /// Suppress newlines in link text.
+    suppress_link_newlines: bool,
     /// Filename substitution.
     filename_subst: HashMap<String, String>,
 }
@@ -433,6 +440,14 @@ impl AsciiDocBackend {
             false
         };
 
+        let suppress_link_newlines = if let Some(toml::Value::Boolean(v)) =
+            ctx.config.get("output.asciidoc.suppress-link-newlines")
+        {
+            *v
+        } else {
+            false
+        };
+
         let mut filename_subst = HashMap::new();
         if let Some(toml::Value::Table(table)) = ctx.config.get("output.asciidoc.file-rename") {
             for (key, val) in table {
@@ -468,6 +483,7 @@ impl AsciiDocBackend {
             link_mode,
             short_links,
             omit_heading_links,
+            suppress_link_newlines,
             filename_subst,
         };
         info!("configured {backend:?}");
@@ -722,6 +738,7 @@ impl AsciiDocBackend {
                             if f.in_header() && self.omit_heading_links {
                                 debug!("Skip link '{dest_url}' in header");
                             } else {
+                                f.modes.push(Render::Link);
                                 self.emit_link_before(&mut f, dest_url);
                             }
                         }
@@ -816,6 +833,7 @@ impl AsciiDocBackend {
                             if f.in_header() && self.omit_heading_links {
                                 debug!("Skip link '{dest_url}' in header");
                             } else {
+                                assert_eq!(f.modes.pop(), Some(Render::Link));
                                 self.emit_link_after(&mut f, dest_url);
                             }
                         }
@@ -929,7 +947,11 @@ impl AsciiDocBackend {
                 }
                 Event::SoftBreak => {
                     trace!("[MD]{indent}SoftBreak");
-                    crlf!(f);
+                    if f.in_link() && self.suppress_link_newlines {
+                        out!(f, " ");
+                    } else {
+                        crlf!(f);
+                    }
                 }
                 Event::HardBreak => {
                     trace!("[MD]{indent}HardBreak");
