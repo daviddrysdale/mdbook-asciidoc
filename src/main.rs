@@ -19,9 +19,14 @@ mod tests;
 lazy_static! {
     /// Regexp to match AsciiDoc images.
     static ref ASCIIDOC_IMAGE_RE: Regex = Regex::new(r"image::?(?P<url>[a-zA-Z0-9_/.]+)").unwrap();
-    /// Regexp to match the invented tag used to transmit raw AsciiDoc.
-    static ref ASCIIDOC_ESCAPE_RE: Regex =
+    /// Regexp to match the invented tag used to transmit raw AsciiDoc, delimited with single quotes.
+    /// Does not cope with escaped single quotes in the content.
+    static ref ASCIIDOC_ESCAPE_SINGLE_RE: Regex =
         Regex::new(r#"<asciidoc content='(?P<content>[^']+)'"#).unwrap();
+    /// Regexp to match the invented tag used to transmit raw AsciiDoc, delimited with double quotes.
+    /// Does not cope with escaped double quotes in the content.
+    static ref ASCIIDOC_ESCAPE_DOUBLE_RE: Regex =
+        Regex::new(r#"<asciidoc content="(?P<content>[^"]+)""#).unwrap();
     /// Regexp to match HTML comments.
     static ref HTML_COMMENT_RE : Regex = Regex::new(r#"<!--\s*(?P<comment>.*?)\s*-->"#).unwrap();
     /// Regexp to match Unicode U+1234 expressions.
@@ -891,7 +896,11 @@ impl AsciiDocBackend {
                     let mut done = false;
                     // Watch out for escaped AsciiDoc.
                     if self.allow_asciidoc {
-                        if let Some(caps) = ASCIIDOC_ESCAPE_RE.captures(&html) {
+                        let mut caps = ASCIIDOC_ESCAPE_SINGLE_RE.captures(&html);
+                        if caps.is_none() {
+                            caps = ASCIIDOC_ESCAPE_DOUBLE_RE.captures(&html);
+                        }
+                        if let Some(caps) = caps {
                             let fragment = caps
                                 .name("content")
                                 .expect("found AsciiDoc escape with no content");
