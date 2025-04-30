@@ -80,6 +80,7 @@ fn main() -> Result<(), Error> {
 }
 
 /// Local error type.
+#[allow(dead_code)]
 #[derive(Debug)]
 enum Error {
     General(String),
@@ -1164,7 +1165,7 @@ impl AsciiDocBackend {
 
     /// Indicate whether there's a short version of the given URL available.
     fn has_short_url(&self, url: &str) -> bool {
-        let result = self.short_links.get(url).is_some();
+        let result = self.short_links.contains_key(url);
         trace!("Does {url} have a short form? {result}");
         result
     }
