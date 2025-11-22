@@ -1,6 +1,5 @@
 //! mdbook backend for AsciiDoc generation
 
-use lazy_static::lazy_static;
 use log::{debug, error, info, trace, warn};
 use mdbook::{
     book::{BookItem, Chapter},
@@ -12,41 +11,84 @@ use std::collections::{HashMap, HashSet};
 use std::ffi::OsStr;
 use std::io::Write;
 use std::path::{Path, PathBuf};
+use std::sync::LazyLock;
 
 #[cfg(test)]
 mod tests;
 
-lazy_static! {
-    /// Regexp to match AsciiDoc images.
-    static ref ASCIIDOC_IMAGE_RE: Regex = Regex::new(r"image::?(?P<url>[a-zA-Z0-9_/.]+)").unwrap();
-    /// Regexp to match the invented tag used to transmit raw AsciiDoc, delimited with single quotes.
-    /// Does not cope with escaped single quotes in the content.
-    static ref ASCIIDOC_ESCAPE_SINGLE_RE: Regex =
-        Regex::new(r#"<asciidoc content='(?P<content>[^']+)'"#).unwrap();
-    /// Regexp to match the invented tag used to transmit raw AsciiDoc, delimited with double quotes.
-    /// Does not cope with escaped double quotes in the content.
-    static ref ASCIIDOC_ESCAPE_DOUBLE_RE: Regex =
-        Regex::new(r#"<asciidoc content="(?P<content>[^"]+)""#).unwrap();
-    /// Regexp to match HTML comments.
-    static ref HTML_COMMENT_RE : Regex = Regex::new(r#"<!--\s*(?P<comment>.*?)\s*-->"#).unwrap();
-    /// Regexp to match Unicode U+1234 expressions.
-    static ref UNICODE_CHAR_RE: Regex = Regex::new(r#"^U\+(?P<code>[0-9a-fA-F]{4})(?P<rest>.*)$"#).unwrap();
-    /// Tags attached to code blocks that should be ignored.
-    static ref IGNORED_CODE_TAGS: HashSet<&'static str> = HashSet::from([
-        "ignore",
-    ]);
-    /// Tags attached to code blocks that identify languages.
-    static ref LANGUAGES: HashSet<&'static str> = HashSet::from([
+/// Regexp to match AsciiDoc images.
+static ASCIIDOC_IMAGE_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"image::?(?P<url>[a-zA-Z0-9_/.]+)").unwrap());
+/// Regexp to match the invented tag used to transmit raw AsciiDoc, delimited with single quotes.
+/// Does not cope with escaped single quotes in the content.
+static ASCIIDOC_ESCAPE_SINGLE_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r#"<asciidoc content='(?P<content>[^']+)'"#).unwrap());
+/// Regexp to match the invented tag used to transmit raw AsciiDoc, delimited with double quotes.
+/// Does not cope with escaped double quotes in the content.
+static ASCIIDOC_ESCAPE_DOUBLE_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r#"<asciidoc content="(?P<content>[^"]+)""#).unwrap());
+/// Regexp to match HTML comments.
+static HTML_COMMENT_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r#"<!--\s*(?P<comment>.*?)\s*-->"#).unwrap());
+/// Regexp to match Unicode U+1234 expressions.
+static UNICODE_CHAR_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r#"^U\+(?P<code>[0-9a-fA-F]{4})(?P<rest>.*)$"#).unwrap());
+/// Tags attached to code blocks that should be ignored.
+static IGNORED_CODE_TAGS: LazyLock<HashSet<&'static str>> =
+    LazyLock::new(|| HashSet::from(["ignore"]));
+/// Tags attached to code blocks that identify languages.
+static LANGUAGES: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
+    HashSet::from([
         // Extras
-        "text", "c++", "toml",
+        "text",
+        "c++",
+        "toml",
         // List from mdbook supported languages
-        "apache", "armasm", "bash", "c", "coffeescript", "cpp", "csharp", "css", "d", "diff", "go",
-        "handlebars", "haskell", "http", "ini", "java", "javascript", "json", "julia", "kotlin",
-        "less", "lua", "makefile", "markdown", "nginx", "objectivec", "perl", "php", "plaintext",
-        "properties", "python", "r", "ruby", "rust", "scala", "scss", "shell", "sql", "swift",
-        "typescript", "x86asm", "xml", "yaml",
-    ]);
-}
+        "apache",
+        "armasm",
+        "bash",
+        "c",
+        "coffeescript",
+        "cpp",
+        "csharp",
+        "css",
+        "d",
+        "diff",
+        "go",
+        "handlebars",
+        "haskell",
+        "http",
+        "ini",
+        "java",
+        "javascript",
+        "json",
+        "julia",
+        "kotlin",
+        "less",
+        "lua",
+        "makefile",
+        "markdown",
+        "nginx",
+        "objectivec",
+        "perl",
+        "php",
+        "plaintext",
+        "properties",
+        "python",
+        "r",
+        "ruby",
+        "rust",
+        "scala",
+        "scss",
+        "shell",
+        "sql",
+        "swift",
+        "typescript",
+        "x86asm",
+        "xml",
+        "yaml",
+    ])
+});
 
 /// Main entrypoint for backend.
 fn main() -> Result<(), Error> {
