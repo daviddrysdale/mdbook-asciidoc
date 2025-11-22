@@ -44,3 +44,7 @@ show_generated_html: sample/book/asciidoc/book.html
 
 sample/expected/book.html: $(addprefix sample/expected/,$(addsuffix .asciidoc,$(SAMPLE_FILES)))
 sample/book/asciidoc/book.asciidoc: $(addprefix sample/src/,$(addsuffix .md,$(SAMPLE_FILES)))
+
+# Target that installs the version of mdbook used to create the sample/expected/ files
+dependencies:
+	cargo install mdbook@=0.4.52
