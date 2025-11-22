@@ -10,7 +10,7 @@ keywords = ["mdbook", "asciidoc"]
 categories = ["text-processing"]
 
 [dependencies]
-env_logger = "0.9.*"
+env_logger = "0.11.*"
 log = "0.4.*"
 mdbook = "0.4.*"
 pulldown-cmark = "0.9.*"
