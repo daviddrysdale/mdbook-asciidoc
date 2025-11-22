@@ -1,21 +1,24 @@
 [#file_chapter1_md]
+
 = Title of First Chapter
 
-This is a paragraph of text, including *bold* and _italic_ text. Also [line-through]#strikethrough#.
+This is a paragraph of text, including **bold** and _italic_ text. Also [line-through]#strikethrough#.
 
-This includes ``+code + 1+`` identifiers, and some "quoted text" (including 'single quotes').
+This includes ``pass:[code + 1]`` identifiers, and some "quoted text" (including 'single quotes').
 
 This is an inline URL: link:++https://lurklurk.org++[https://lurklurk.org]
 
 This is link:++https://github.com/daviddrysdale/mdbook-docbook++[link].
 
 [quote]
+____
 This is a block quote, including
 multiple lines.
 
+____
 A paragraph that includes HTML characters – like an en-dash.
 
-As a result, when writing code that accepts closures, *use the most general ``+Fn*+`` trait that works*, to allow ...
+As a result, when writing code that accepts closures, **use the most general ``+Fn*+`` trait that works**, to allow ...
 
 Scott Meyers' original _Effective C&#43;&#43;_ series.  The C&#43;&#43; language was (and is) full of footguns, so _Effective
 C&#43;&#43;_ focused on a collection of advice.
@@ -30,17 +33,28 @@ fn main() {
 Now for some bullets:
 
 * top-level first
+
 ** second-level 1
 ** second-level 2
 *** third level
+
+
+
+
 * top-level second
-[arabic]
+
 .. sub-numbered bullet 1
 .. sub-numbered bullet 2
+
+
 * top-level third
-+
+
 with follow-on para
+
+
 * top-level fourth.
+
+
 
 A MarkDown table.
 
@@ -57,3 +71,5 @@ List with checkboxes:
 
 * [ ] Do something.
 * [x] Do something else.
+
+
