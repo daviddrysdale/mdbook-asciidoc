@@ -37,7 +37,15 @@ jobs:
         with:
           toolchain: ${{ matrix.rust }}
           components: rustfmt
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: 2.7
+      - uses: reitzig/actions-asciidoctor@v2.0.2
+        with:
+          version: 2.0.18
       - run: cargo +${{ matrix.rust }} test --workspace -- --nocapture
+      - run: make dependencies
+      - run: make test
 
   clippy:
     runs-on: ubuntu-latest
