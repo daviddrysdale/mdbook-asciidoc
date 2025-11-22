@@ -326,7 +326,7 @@ type RenderAfterLink = fn(&AsciiDocBackend, &AsciiDocOutput, &str) -> String;
 type ShouldRenderAfter = fn(&AsciiDocBackend, &str) -> bool;
 
 /// How to render hyperlinks.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, Default)]
 enum LinkMode {
     /// Render same as in the MarkDown (the text itself is a link).
     /// Invisible in printed output.
