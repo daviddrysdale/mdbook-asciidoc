@@ -1,11 +1,12 @@
 //! mdbook backend for AsciiDoc generation
 
 use log::{debug, error, info, trace, warn};
-use mdbook::{
+use md::TagEnd;
+use mdbook_markdown::pulldown_cmark as md;
+use mdbook_renderer::{
     book::{BookItem, Chapter},
-    renderer::RenderContext,
+    RenderContext, MDBOOK_VERSION,
 };
-use pulldown_cmark as md;
 use regex::Regex;
 use std::collections::{HashMap, HashSet};
 use std::ffi::OsStr;
@@ -95,19 +96,13 @@ fn main() -> Result<(), Error> {
     env_logger::init();
     let mut stdin = std::io::stdin();
     let ctx = RenderContext::from_json(&mut stdin).unwrap();
-    let built_version = semver::Version::parse(mdbook::MDBOOK_VERSION).unwrap_or_else(|e| {
-        panic!(
-            "failed to parse mdbook version {}: {:?}",
-            mdbook::MDBOOK_VERSION,
-            e
-        )
-    });
+    let built_version = semver::Version::parse(MDBOOK_VERSION)
+        .unwrap_or_else(|e| panic!("failed to parse mdbook version {MDBOOK_VERSION}: {e:?}",));
     let book_version = semver::Version::parse(&ctx.version)
-        .unwrap_or_else(|e| panic!("failed to parse book version {}: {:?}", ctx.version, e));
+        .unwrap_or_else(|e| panic!("failed to parse book version {}: {e:?}", ctx.version));
     if built_version != book_version {
         error!(
-            "backend built on v{} of mdbook, processing v{} book",
-            mdbook::MDBOOK_VERSION,
+            "backend built on v{MDBOOK_VERSION} of mdbook, processing v{} book",
             ctx.version
         );
     }
@@ -127,6 +122,7 @@ fn main() -> Result<(), Error> {
 enum Error {
     General(String),
     Io(std::io::Error),
+    Mdbook(mdbook_renderer::errors::Error),
 }
 
 impl From<String> for Error {
@@ -138,6 +134,12 @@ impl From<String> for Error {
 impl From<std::io::Error> for Error {
     fn from(e: std::io::Error) -> Error {
         Self::Io(e)
+    }
+}
+
+impl From<mdbook_renderer::errors::Error> for Error {
+    fn from(e: mdbook_renderer::errors::Error) -> Error {
+        Self::Mdbook(e)
     }
 }
 
@@ -375,22 +377,22 @@ struct AsciiDocBackend {
 impl AsciiDocBackend {
     /// Create a new backend, with options populated from the given context.
     pub fn new(ctx: &RenderContext) -> Result<Self, Error> {
-        let allow_asciidoc = if let Some(toml::Value::Boolean(v)) =
+        let allow_asciidoc = if let Ok(Some(toml::Value::Boolean(v))) =
             ctx.config.get("output.asciidoc.allow-asciidoc")
         {
-            *v
+            v
         } else {
             false
         };
-        let heading_offset = if let Some(toml::Value::Integer(v)) =
+        let heading_offset = if let Ok(Some(toml::Value::Integer(v))) =
             ctx.config.get("output.asciidoc.heading-offset")
         {
-            *v as isize
+            v as isize
         } else {
             0
         };
         let link_mode =
-            if let Some(toml::Value::String(m)) = ctx.config.get("output.asciidoc.link-mode") {
+            if let Some(toml::Value::String(m)) = ctx.config.get("output.asciidoc.link-mode")? {
                 match m.as_str() {
                     "default" => LinkMode::Inline,
                     "after" => LinkMode::After(Self::link_after),
@@ -403,7 +405,7 @@ impl AsciiDocBackend {
             };
 
         let mut short_links = HashMap::new();
-        if let Some(toml::Value::Table(table)) = ctx.config.get("output.asciidoc.url-shorten") {
+        if let Some(toml::Value::Table(table)) = ctx.config.get("output.asciidoc.url-shorten")? {
             for (key, val) in table {
                 if let toml::Value::String(val) = val {
                     log::info!("Shorten URL {key} to {val}");
@@ -414,22 +416,23 @@ impl AsciiDocBackend {
             }
         }
 
-        let skip_chapters =
-            if let Some(toml::Value::String(v)) = ctx.config.get("output.asciidoc.skip-chapters") {
-                v
-            } else {
-                ""
-            }
-            .split(',')
-            .map(|s| s.to_owned())
-            .collect();
+        let skip_chapters = if let Some(toml::Value::String(v)) =
+            ctx.config.get("output.asciidoc.skip-chapters")?
+        {
+            v
+        } else {
+            "".to_string()
+        }
+        .split(',')
+        .map(|s| s.to_owned())
+        .collect();
 
         let mut unicode_subst = HashMap::new();
-        if let Some(toml::Value::Table(table)) = ctx.config.get("output.asciidoc.unicode-subst") {
+        if let Some(toml::Value::Table(table)) = ctx.config.get("output.asciidoc.unicode-subst")? {
             for (key, val) in table {
                 if let toml::Value::String(value) = val {
-                    let key = transmute_unicode(key);
-                    let value = transmute_unicode(value);
+                    let key = transmute_unicode(&key);
+                    let value = transmute_unicode(&value);
                     let mut srcs = key.chars();
                     let mut dests = value.chars();
 
@@ -462,7 +465,9 @@ impl AsciiDocBackend {
         }
 
         let mut code_block_wrap = HashMap::new();
-        if let Some(toml::Value::Table(table)) = ctx.config.get("output.asciidoc.code-block-wrap") {
+        if let Some(toml::Value::Table(table)) =
+            ctx.config.get("output.asciidoc.code-block-wrap")?
+        {
             for (key, val) in table {
                 if let toml::Value::String(val) = val {
                     log::info!("Will wrap code blocks marked with '{key}' in a '{val}' block");
@@ -472,8 +477,9 @@ impl AsciiDocBackend {
                 }
             }
         }
-        let code_block_wrap_delimiter = if let Some(toml::Value::String(w)) =
-            ctx.config.get("output.asciidoc.code-block-wrap-delimiter")
+        let code_block_wrap_delimiter = if let Some(toml::Value::String(w)) = ctx
+            .config
+            .get("output.asciidoc.code-block-wrap-delimiter")?
         {
             w.to_string()
         } else {
@@ -481,23 +487,23 @@ impl AsciiDocBackend {
         };
 
         let omit_heading_links = if let Some(toml::Value::Boolean(v)) =
-            ctx.config.get("output.asciidoc.omit-heading-links")
+            ctx.config.get("output.asciidoc.omit-heading-links")?
         {
-            *v
+            v
         } else {
             false
         };
 
         let suppress_link_newlines = if let Some(toml::Value::Boolean(v)) =
-            ctx.config.get("output.asciidoc.suppress-link-newlines")
+            ctx.config.get("output.asciidoc.suppress-link-newlines")?
         {
-            *v
+            v
         } else {
             false
         };
 
         let mut filename_subst = HashMap::new();
-        if let Some(toml::Value::Table(table)) = ctx.config.get("output.asciidoc.file-rename") {
+        if let Some(toml::Value::Table(table)) = ctx.config.get("output.asciidoc.file-rename")? {
             for (key, val) in table {
                 if let toml::Value::String(val) = val {
                     log::info!("Rename file '{key}' to '{val}'");
@@ -626,13 +632,20 @@ impl AsciiDocBackend {
                 filename.display().to_string().replace('.', "_")
             );
         }
+        let mut in_tags = vec![];
         for event in parser {
             match &event {
                 Event::Start(tag) => {
                     trace!("[MD]{indent}Start({tag:?})");
+                    in_tags.push(tag.clone());
                     match tag {
                         Tag::Paragraph => {}
-                        Tag::Heading(level, _frag_id, _classes) => {
+                        Tag::Heading {
+                            level,
+                            id: _,
+                            classes: _,
+                            attrs: _,
+                        } => {
                             let level = match level {
                                 md::HeadingLevel::H1 => 1,
                                 md::HeadingLevel::H2 => 2,
@@ -655,7 +668,7 @@ impl AsciiDocBackend {
                             }
                             out!(f, "{} ", "=".repeat(level));
                         }
-                        Tag::BlockQuote => {
+                        Tag::BlockQuote(_kind) => {
                             cr!(f);
                             outln!(f, "[quote]");
                             outln!(f, "____");
@@ -782,7 +795,12 @@ impl AsciiDocBackend {
                             f.modes.push(Render::Strikethrough);
                             out!(f, "[line-through]#");
                         }
-                        Tag::Link(_link_type, dest_url, _title) => {
+                        Tag::Link {
+                            link_type: _,
+                            dest_url,
+                            title: _,
+                            id: _,
+                        } => {
                             if f.in_header() && self.omit_heading_links {
                                 debug!("Skip link '{dest_url}' in header");
                             } else {
@@ -790,7 +808,12 @@ impl AsciiDocBackend {
                                 self.emit_link_before(&mut f, dest_url);
                             }
                         }
-                        Tag::Image(_link_type, dest_url, _title) => {
+                        Tag::Image {
+                            link_type: _,
+                            dest_url,
+                            title: _,
+                            id: _,
+                        } => {
                             if f.after_blank() {
                                 // Block image (::).
                                 out!(f, "image::{dest_url}[\"");
@@ -802,23 +825,27 @@ impl AsciiDocBackend {
 
                             // May be followed by an `Event::Text` holding the alt text.
                         }
+                        _ => {}
                     }
                     indent.inc();
                 }
                 Event::End(tag) => {
                     indent.dec();
                     trace!("[MD]{indent}End({tag:?})");
+                    let start = in_tags
+                        .pop()
+                        .unwrap_or_else(|| panic!("Mismatched end tag!"));
                     match tag {
-                        Tag::Paragraph => {
+                        TagEnd::Paragraph => {
                             cr!(f); // End the current in-progress line.
                             crlf!(f); // Additional blank line.
                         }
-                        Tag::Heading(_, _, _) => {
+                        TagEnd::Heading(_level) => {
                             assert_eq!(f.modes.pop(), Some(Render::Heading));
                             cr!(f); // End the current in-progress line.
                             crlf!(f); // Additional blank line.
                         }
-                        Tag::CodeBlock(_kind) => {
+                        TagEnd::CodeBlock => {
                             let mode = match f.modes.pop() {
                                 Some(Render::CodeBlock(m)) => m,
                                 m => panic!("Unexpected last mode {m:?}"),
@@ -830,67 +857,90 @@ impl AsciiDocBackend {
                             }
                             crlf!(f);
                         }
-                        Tag::BlockQuote => {
+                        TagEnd::BlockQuote(_kind) => {
                             cr!(f);
                             outln!(f, "____");
                         }
-                        Tag::List(_first_num) => {
+                        TagEnd::List(_first_num) => {
                             f.lists.pop().expect("leaving a list when not in one!");
                             crlf!(f);
                         }
-                        Tag::Item => {
+                        TagEnd::Item => {
                             crlf!(f);
                         }
-                        Tag::FootnoteDefinition(text) => {
+                        TagEnd::FootnoteDefinition => {
                             // Switch back to accumulating text for the chapter.
+                            let Tag::FootnoteDefinition(text) = start else {
+                                panic!("Mismatched start/end tag!");
+                            };
                             debug!("Done accumulating text for definition of footnote {text}");
                             let footnote = f;
                             f = swapped_f.take().expect("No stored output!");
                             f.replace_all(
-                                &footnote_marker(text),
+                                &footnote_marker(&text),
                                 &footnote,
                                 Strip::TrailingWhitespace,
                             );
                         }
 
                         // Table elements
-                        Tag::Table(_aligns) => {
+                        TagEnd::Table => {
                             cr!(f);
                             outln!(f, "|===");
                             crlf!(f);
                         }
-                        Tag::TableHead | Tag::TableRow => {}
-                        Tag::TableCell => {
+                        TagEnd::TableHead | TagEnd::TableRow => {}
+                        TagEnd::TableCell => {
                             assert_eq!(f.modes.pop(), Some(Render::Table));
                         }
 
                         // Inline elements
-                        Tag::Emphasis => {
+                        TagEnd::Emphasis => {
                             assert_eq!(f.modes.pop(), Some(Render::Italic));
                             out!(f, "_");
                         }
-                        Tag::Strong => {
+                        TagEnd::Strong => {
                             assert_eq!(f.modes.pop(), Some(Render::Bold));
                             out!(f, "**");
                         }
-                        Tag::Strikethrough => {
+                        TagEnd::Strikethrough => {
                             assert_eq!(f.modes.pop(), Some(Render::Strikethrough));
                             out!(f, "#");
                         }
-                        Tag::Link(_link_type, dest_url, _title) => {
+                        TagEnd::Link => {
+                            let Tag::Link {
+                                link_type: _,
+                                dest_url,
+                                title: _,
+                                id: _,
+                            } = start
+                            else {
+                                panic!("Mismatched start/end tag!");
+                            };
                             if f.in_header() && self.omit_heading_links {
                                 debug!("Skip link '{dest_url}' in header");
                             } else {
                                 assert_eq!(f.modes.pop(), Some(Render::Link));
-                                self.emit_link_after(&mut f, dest_url);
+                                self.emit_link_after(&mut f, &dest_url);
                             }
                         }
-                        Tag::Image(_link_type, _dest_url, title) => {
+                        TagEnd::Image => {
+                            let Tag::Image {
+                                link_type: _,
+                                dest_url: _,
+                                title,
+                                id: _,
+                            } = start
+                            else {
+                                panic!("Mismatched start/end tag!");
+                            };
+
                             if !title.is_empty() {
-                                out!(f, "\",title=\"{title}");
+                                out!(f, "\",title=\"{}", title);
                             }
                             out!(f, "\"]");
                         }
+                        _ => {}
                     }
                 }
                 Event::Text(text) => {
@@ -933,7 +983,7 @@ impl AsciiDocBackend {
                         out!(f, "``+{text}+``");
                     }
                 }
-                Event::Html(text) => {
+                Event::InlineHtml(text) | Event::Html(text) => {
                     trace!("[MD]{indent}Html({text})");
                     let html = text.to_string();
                     let mut done = false;
@@ -1015,6 +1065,12 @@ impl AsciiDocBackend {
                     trace!("[MD]{indent}TaskListMarker({done})");
                     let marker = if *done { "[x]" } else { "[ ]" };
                     out!(f, "{} ", marker);
+                }
+                Event::InlineMath(_) => {
+                    trace!("[MD]{indent}InlineMath");
+                }
+                Event::DisplayMath(_) => {
+                    trace!("[MD]{indent}DisplayMath");
                 }
             }
         }

@@ -47,4 +47,4 @@ sample/book/asciidoc/book.asciidoc: $(addprefix sample/src/,$(addsuffix .md,$(SA
 
 # Target that installs the version of mdbook used to create the sample/expected/ files
 dependencies:
-	cargo install mdbook@=0.4.52
+	cargo install mdbook@=0.5.1
