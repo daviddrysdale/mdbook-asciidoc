@@ -1,6 +1,6 @@
 [package]
 name = "mdbook-asciidoc"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["David Drysdale <dmd@lurklurk.org>"]
 edition = "2021"
 license = "Apache-2.0"
@@ -12,9 +12,9 @@ categories = ["text-processing"]
 [dependencies]
 env_logger = "0.11.*"
 log = "0.4.*"
-mdbook = "0.4.*"
-pulldown-cmark = "0.9.*"
+mdbook-markdown = "0.5.*"
+mdbook-renderer = "0.5.*"
 regex = "1.*"
 semver = "1.*"
-toml = "0.5.*"
+toml = "0.9.*"
 url = "2.*"
