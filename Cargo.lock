@@ -310,9 +310,9 @@ dependencies = [
 
 [[package]]
 name = "mdbook-core"
-version = "0.5.1"
+version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2ef8430ec21b88489dfffd90c0fb9bd3eab96bf7642ef0cab74754b9d2e5b7f6"
+checksum = "39a3873d4afac65583f1acb56ff058df989d5b4a2464bb02c785549727d307ee"
 dependencies = [
  "anyhow",
  "regex",
@@ -335,9 +335,9 @@ dependencies = [
 
 [[package]]
 name = "mdbook-renderer"
-version = "0.5.1"
+version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3c1791611e2118bc3521b83afbf24e5c973414807f8c1cb378b8fc8845c7fc70"
+checksum = "93ed59f225b3ae4283c56bea633db83184627a090d892908bd66990c68e10b43"
 dependencies = [
  "anyhow",
  "mdbook-core",
